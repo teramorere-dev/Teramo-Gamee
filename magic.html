@@ -1,0 +1,3030 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AETHER WEAVER - 魔法クラフト・アクション</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #05050a;
+            font-family: 'Noto Sans JP', sans-serif;
+            color: #e2e8f0;
+        }
+        .font-cinzel {
+            font-family: 'Cinzel', serif;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .glass-panel {
+            background: rgba(10, 12, 24, 0.78);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(139, 92, 246, 0.35);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.75);
+        }
+        .neon-btn {
+            background: linear-gradient(135deg, rgba(88, 28, 135, 0.65), rgba(30, 58, 138, 0.65));
+            border: 1px solid rgba(56, 189, 248, 0.55);
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.25);
+            transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+        }
+        .neon-btn:hover {
+            border-color: #00f3ff;
+            box-shadow: 0 0 22px rgba(0, 243, 255, 0.55);
+            transform: translateY(-1px);
+        }
+        .neon-btn:active {
+            transform: translateY(1px);
+        }
+        @keyframes pulseNeon {
+            0%, 100% { text-shadow: 0 0 12px rgba(0, 243, 255, 0.8), 0 0 28px rgba(168, 85, 247, 0.6); }
+            50% { text-shadow: 0 0 20px rgba(0, 243, 255, 1), 0 0 42px rgba(236, 72, 153, 0.9); }
+        }
+        .title-glow {
+            animation: pulseNeon 3s infinite ease-in-out;
+        }
+        .slot-box {
+            transition: all 0.15s ease;
+        }
+        .slot-box:hover {
+            border-color: #00f3ff;
+            background: rgba(30, 41, 59, 0.85);
+        }
+        .patch-selected {
+            outline: 2px solid #ffd700;
+            box-shadow: 0 0 18px rgba(255, 215, 0, 0.75);
+            transform: scale(1.06);
+        }
+        /* カスタムスクロールバー */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(139, 92, 246, 0.5);
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="relative">
+
+    <!-- メインゲームキャンバス -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- HUD (戦闘中UI) -->
+    <div id="hudLayer" class="hidden pointer-events-none fixed inset-0 z-10 flex flex-col justify-between p-3 sm:p-5">
+        <!-- 上部バー -->
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <!-- 左上: プレイヤーHP・マナ・成長ステータス -->
+            <div class="glass-panel rounded-2xl p-3 sm:p-4 w-64 sm:w-76 pointer-events-auto">
+                <div class="flex items-center justify-between text-xs font-bold mb-1">
+                    <span class="text-rose-400 tracking-wider">LIFE // 生命力</span>
+                    <span id="hpText" class="text-rose-200 font-mono">100 / 100</span>
+                </div>
+                <div class="w-full h-2.5 bg-slate-900/90 rounded-full overflow-hidden border border-rose-500/30 mb-2.5">
+                    <div id="hpBar" class="h-full bg-gradient-to-r from-rose-600 via-pink-500 to-amber-400 transition-all duration-100" style="width: 100%"></div>
+                </div>
+                <div class="flex items-center justify-between text-xs font-bold mb-1">
+                    <span class="text-cyan-400 tracking-wider flex items-center gap-1.5">
+                        MANA // 魔力
+                        <span id="manaBuffBadge" class="hidden px-1.5 py-0.2 rounded bg-amber-500/20 border border-amber-400 text-[9px] text-amber-300">RAPID</span>
+                    </span>
+                    <span id="manaText" class="text-cyan-200 font-mono">100 / 100</span>
+                </div>
+                <div class="w-full h-2.5 bg-slate-900/90 rounded-full overflow-hidden border border-cyan-500/30 mb-2">
+                    <div id="manaBar" class="h-full bg-gradient-to-r from-indigo-600 via-cyan-500 to-teal-300 transition-all duration-100" style="width: 100%"></div>
+                </div>
+                <div class="flex items-center justify-between text-[11px] text-slate-300 pt-1 border-t border-slate-800/80">
+                    <span>再生: <span id="manaRegenRateText" class="text-cyan-300 font-mono font-bold">18.0/s</span> <span id="manaUpgradeLevelBadge" class="text-amber-300 font-bold ml-1">Lv.1</span></span>
+                    <div class="flex items-center gap-1">
+                        <span id="shieldStatusTag" class="hidden px-1.5 py-0.5 rounded bg-blue-950 border border-blue-400/50 text-[9px] text-blue-300 font-bold">🛡️ 無敵</span>
+                        <span id="drainStatusTag" class="hidden px-1.5 py-0.5 rounded bg-rose-950 border border-rose-400/50 text-[9px] text-rose-300 font-bold">🩸 吸血</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 中央上: ウェーブ & スコア -->
+            <div class="glass-panel rounded-2xl px-4 py-2.5 flex items-center gap-4 text-xs sm:text-sm pointer-events-auto">
+                <div>
+                    <span class="text-slate-400 text-[10px] block">WAVE</span>
+                    <span id="waveDisplay" class="font-black text-cyan-300 text-base sm:text-lg">1</span>
+                </div>
+                <div class="h-6 w-px bg-slate-800"></div>
+                <div>
+                    <span class="text-slate-400 text-[10px] block">SCORE</span>
+                    <span id="scoreDisplay" class="font-mono font-bold text-amber-300">0</span>
+                </div>
+                <div class="h-6 w-px bg-slate-800 hidden sm:block"></div>
+                <div id="enemyCountDisplay" class="text-[11px] text-rose-300 font-bold hidden sm:block">
+                    残存エネミー: 0
+                </div>
+            </div>
+
+            <!-- 右上: クラフト & スキルツリーボタン -->
+            <div class="pointer-events-auto flex items-center gap-2">
+                <button id="openSkillBtn" class="neon-btn rounded-2xl px-3.5 py-2.5 flex items-center gap-1.5 text-xs sm:text-sm font-bold text-amber-200 cursor-pointer" style="border-color: rgba(251, 191, 36, 0.65);">
+                    <span class="text-base">🌌</span>
+                    <span>スキル</span>
+                    <span id="hudSpBadge" class="px-1.5 py-0.5 rounded bg-amber-950/90 border border-amber-400/60 text-[10px] text-amber-300 font-mono">SP:0</span>
+                    <span class="hidden sm:inline px-1.5 py-0.5 rounded bg-slate-900/90 border border-slate-600 text-[10px] text-slate-300">K</span>
+                </button>
+                <button id="openCraftBtn" class="neon-btn rounded-2xl px-3.5 py-2.5 flex items-center gap-1.5 text-xs sm:text-sm font-bold text-cyan-100 cursor-pointer">
+                    <span class="text-base">🔮</span>
+                    <span>魔法クラフト</span>
+                    <span class="px-1.5 py-0.5 rounded bg-cyan-950/90 border border-cyan-400/50 text-[10px] text-cyan-300">C</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 中央ウェーブクリアバナー -->
+        <div id="waveClearBanner" class="hidden fixed inset-x-0 top-1/3 -translate-y-1/2 flex flex-col items-center justify-center pointer-events-none z-20">
+            <div class="glass-panel border-cyan-400/70 rounded-3xl px-8 py-5 text-center transform scale-100 transition-all">
+                <div class="text-xs tracking-[0.3em] text-cyan-300 font-bold mb-1">ARENA DOMINATED</div>
+                <div class="text-2xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-white to-purple-300">WAVE CLEAR!</div>
+                <div id="waveRewardText" class="text-xs sm:text-sm text-amber-300 font-bold mt-2">報酬パッチ＆スキルポイントを獲得！</div>
+            </div>
+        </div>
+
+        <!-- 下部: スペルロットクイックバー -->
+        <div class="flex flex-col items-center gap-2">
+            <div id="spellBarContainer" class="flex flex-wrap items-center justify-center gap-2 sm:gap-3 pointer-events-auto">
+                <!-- JSでスペルカードを描画 -->
+            </div>
+            <div id="controlsHintText" class="text-[11px] text-slate-400/90 bg-slate-950/70 px-3 py-1 rounded-full border border-slate-800">
+                移動: <span class="text-cyan-300 font-bold">WASD / 矢印</span> ｜ 照準: <span class="text-cyan-300 font-bold">マウス</span> ｜ 魔法発動: <span class="text-amber-300 font-bold">1〜3(4) キー</span> ｜ 編成: <span class="text-purple-300 font-bold">C</span> ｜ スキル: <span class="text-amber-300 font-bold">K</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- トースト通知 -->
+    <div id="toastContainer" class="fixed top-24 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 pointer-events-none"></div>
+
+    <!-- 魔法クラフトモーダル -->
+    <div id="craftModal" class="hidden fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-6 bg-slate-950/75 backdrop-blur-md">
+        <div class="glass-panel rounded-3xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden border-purple-500/50">
+            <!-- モーダルヘッダー -->
+            <div class="flex flex-wrap items-center justify-between gap-2 px-5 py-4 border-b border-slate-800 bg-slate-900/60">
+                <div>
+                    <h2 class="text-lg sm:text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-purple-300 flex items-center gap-2">
+                        <span>✨ 魔導式クラフト＆合体錬成</span>
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-0.5">下のインベントリからパッチを選択し、スロットをクリックして配置（右クリックで解除）</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="switchToSkillBtn" class="neon-btn rounded-xl px-3.5 py-2 text-xs sm:text-sm font-bold text-amber-200 cursor-pointer" style="border-color: rgba(251, 191, 36, 0.65);">
+                        🌌 スキルツリーへ (<span id="craftModalSpCount">0</span> SP)
+                    </button>
+                    <button id="closeCraftBtn" class="neon-btn rounded-xl px-4 py-2 text-xs sm:text-sm font-bold text-white cursor-pointer">
+                        戦闘に戻る [C / ESC]
+                    </button>
+                </div>
+            </div>
+
+            <!-- モーダル本体 -->
+            <div class="p-4 sm:p-5 overflow-y-auto space-y-5 flex-1">
+                <!-- スペル構成エリア -->
+                <div id="craftSpellsArea" class="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                    <!-- JSで動的生成 -->
+                </div>
+
+                <!-- 手持ちパッチインベントリ -->
+                <div class="bg-slate-950/70 rounded-2xl p-4 border border-slate-800">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs sm:text-sm font-bold text-purple-300">📦 所持パッチ一覧（クリックで選択）</span>
+                        <span id="selectedPatchHint" class="text-xs text-amber-300 font-bold">パッチを選択してください</span>
+                    </div>
+                    <div id="inventoryGrid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2.5">
+                        <!-- JSで動的生成 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- スキルツリー（アビリティツリー）モーダル -->
+    <div id="skillModal" class="hidden fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-md">
+        <div class="glass-panel rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden border-amber-500/50">
+            <!-- ヘッダー -->
+            <div class="flex flex-wrap items-center justify-between gap-2 px-5 py-4 border-b border-slate-800 bg-slate-900/70">
+                <div>
+                    <h2 class="text-lg sm:text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-cyan-300 to-purple-300 flex items-center gap-2">
+                        <span>🌌 エーテル・スキルツリー（魔導覚醒）</span>
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-0.5">ウェーブクリアや敵撃破で獲得したSPを消費して永久アビリティを解放（リトライ時も一部継承可能）</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="px-3 py-1.5 rounded-xl bg-amber-950/80 border border-amber-400/60 text-xs sm:text-sm font-black text-amber-300">
+                        所持SP: <span id="skillModalSpCount" class="text-base">0</span>
+                    </div>
+                    <button id="switchToCraftBtn" class="neon-btn rounded-xl px-3.5 py-2 text-xs sm:text-sm font-bold text-cyan-200 cursor-pointer">
+                        🔮 魔法クラフトへ
+                    </button>
+                    <button id="closeSkillBtn" class="neon-btn rounded-xl px-4 py-2 text-xs sm:text-sm font-bold text-white cursor-pointer">
+                        閉じる [K / ESC]
+                    </button>
+                </div>
+            </div>
+
+            <!-- スキルツリーノード一覧 -->
+            <div class="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4">
+                <div id="skillTreeGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- JSで動的生成 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- タイトル画面 -->
+    <div id="titleScreen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#05050a]/85 backdrop-blur-sm">
+        <div class="glass-panel rounded-3xl p-7 sm:p-10 max-w-xl w-full text-center border-cyan-500/40">
+            <div class="text-xs tracking-[0.35em] text-cyan-400 font-bold mb-2">ARCANE TACTICAL ACTION</div>
+            <h1 class="font-cinzel text-3xl sm:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-white to-purple-400 title-glow mb-3">
+                AETHER WEAVER
+            </h1>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-6">
+                属性・アクション・特殊パッチを自由に組み合わせて自分だけの魔導式を錬成。<br>
+                アクション同士の<span class="text-amber-300 font-bold">「合体魔法（シナジー）」</span>を発動し、ライバル魔導師や幾何学の軍勢を撃破せよ！
+            </p>
+            <div class="grid grid-cols-3 gap-2 text-[11px] text-slate-300 bg-slate-950/70 p-3 rounded-2xl border border-slate-800 mb-6">
+                <div><span class="text-cyan-300 font-bold block">WASD / 矢印</span>移動</div>
+                <div><span class="text-amber-300 font-bold block">1 / 2 / 3 キー</span>カスタム魔法</div>
+                <div><span class="text-purple-300 font-bold block">C キー</span>魔法クラフト</div>
+            </div>
+            <button id="startGameBtn" class="neon-btn w-full py-4 rounded-2xl text-base sm:text-lg font-black tracking-widest text-white cursor-pointer">
+                ▶ ゲームスタート
+            </button>
+        </div>
+    </div>
+
+    <!-- ゲームオーバー画面 -->
+    <div id="gameOverScreen" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+        <div class="glass-panel rounded-3xl p-7 sm:p-10 max-w-md w-full text-center border-rose-500/50">
+            <div class="text-xs tracking-[0.3em] text-rose-400 font-bold mb-1">AETHER DEPLETED</div>
+            <h2 class="text-3xl sm:text-4xl font-black text-rose-300 mb-4">GAME OVER</h2>
+            <div class="bg-slate-950/80 rounded-2xl p-4 border border-slate-800 space-y-2 mb-6 text-sm">
+                <div class="flex justify-between">
+                    <span class="text-slate-400">到達ウェーブ</span>
+                    <span id="finalWaveText" class="font-bold text-cyan-300">WAVE 1</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">撃破エネミー数</span>
+                    <span id="finalKillsText" class="font-bold text-rose-300">0 体</span>
+                </div>
+                <div class="flex justify-between border-t border-slate-800 pt-2">
+                    <span class="text-slate-300 font-bold">最終スコア</span>
+                    <span id="finalScoreText" class="font-black text-amber-300 text-lg">0</span>
+                </div>
+            </div>
+            <div class="space-y-2.5">
+                <button id="gameOverSkillBtn" class="neon-btn w-full py-3 rounded-2xl text-sm font-bold text-amber-200 cursor-pointer" style="border-color: rgba(251, 191, 36, 0.7);">
+                    🌌 スキルツリーを確認・強化する (<span id="gameOverSpText">0</span> SP)
+                </button>
+                <button id="retryGameBtn" class="neon-btn w-full py-3.5 rounded-2xl text-base font-black text-white cursor-pointer">
+                    ↻ もう一度挑戦する（スキル引き継ぎ）
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. Web Audio API サウンドシンセサイザー
+        // ==========================================
+        class SoundSynth {
+            constructor() {
+                this.ctx = null;
+            }
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume().catch(() => {});
+                }
+            }
+            playTone(freqStart, freqEnd, duration, type = 'sine', vol = 0.12) {
+                if (!this.ctx) return;
+                try {
+                    const now = this.ctx.currentTime;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freqStart, now);
+                    if (freqEnd !== freqStart) {
+                        osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), now + duration);
+                    }
+                    gain.gain.setValueAtTime(vol, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + duration);
+                } catch (e) {}
+            }
+            playCast(isCombo = false) {
+                this.playTone(isCombo ? 780 : 540, isCombo ? 1480 : 960, isCombo ? 0.22 : 0.14, 'triangle', 0.11);
+                if (isCombo) {
+                    setTimeout(() => this.playTone(620, 1680, 0.24, 'sine', 0.09), 40);
+                }
+            }
+            playExplosion() {
+                if (!this.ctx) return;
+                try {
+                    const now = this.ctx.currentTime;
+                    const bufferSize = Math.floor(this.ctx.sampleRate * 0.22);
+                    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.35));
+                    }
+                    const noise = this.ctx.createBufferSource();
+                    noise.buffer = buffer;
+
+                    const filter = this.ctx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.setValueAtTime(360, now);
+                    filter.frequency.exponentialRampToValueAtTime(60, now + 0.22);
+
+                    const gain = this.ctx.createGain();
+                    gain.gain.setValueAtTime(0.18, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+                    noise.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    noise.start(now);
+                } catch (e) {}
+            }
+            playHit() {
+                this.playTone(210, 75, 0.09, 'sawtooth', 0.09);
+            }
+            playPickup() {
+                this.playTone(660, 990, 0.09, 'sine', 0.1);
+                setTimeout(() => this.playTone(990, 1320, 0.12, 'sine', 0.1), 55);
+            }
+            playHeal() {
+                this.playTone(440, 880, 0.16, 'sine', 0.1);
+            }
+            playClick() {
+                this.playTone(820, 1040, 0.06, 'sine', 0.08);
+            }
+        }
+        const sfx = new SoundSynth();
+
+        // ==========================================
+        // 2. パッチ定義 & 合体ルール解析
+        // ==========================================
+        const PATCH_DEFS = {
+            fire: {
+                id: 'fire', name: '炎', category: 'element', icon: '🔥',
+                color: '#ff4d2a', secondary: '#ffbe0b', manaCost: 10,
+                desc: '着弾時に爆風発生・高火力'
+            },
+            ice: {
+                id: 'ice', name: '氷', category: 'element', icon: '❄️',
+                color: '#00f3ff', secondary: '#bae6fd', manaCost: 9,
+                desc: '敵を凍結スロウ状態にする'
+            },
+            thunder: {
+                id: 'thunder', name: '雷', category: 'element', icon: '⚡',
+                color: '#c084fc', secondary: '#38bdf8', manaCost: 11,
+                desc: '弾速UP＆周囲の敵へ電撃連鎖'
+            },
+            poison: {
+                id: 'poison', name: '毒', category: 'element', icon: '☠️',
+                color: '#10b981', secondary: '#a3e635', manaCost: 10,
+                desc: '敵を猛毒にし継続スリップダメージ'
+            },
+            holy: {
+                id: 'holy', name: '光', category: 'element', icon: '🌟',
+                color: '#fef08a', secondary: '#ffffff', manaCost: 13,
+                desc: '超高速弾化し、敵を貫通して直進する'
+            },
+            bow: {
+                id: 'bow', name: '弓', category: 'action', icon: '🏹',
+                color: '#38bdf8', secondary: '#ffffff', manaCost: 12,
+                desc: 'カーソル方向へ高速の魔力矢を発射'
+            },
+            beam: {
+                id: 'beam', name: 'ビーム', category: 'action', icon: '🔦',
+                color: '#f43f5e', secondary: '#38bdf8', manaCost: 20,
+                desc: '前方に高出力レーザービームを持続照射'
+            },
+            satellite: {
+                id: 'satellite', name: '衛星', category: 'action', icon: '🛰️',
+                color: '#34d399', secondary: '#a7f3d0', manaCost: 16,
+                desc: '周囲を周回し接触ダメージを与えるオーブ'
+            },
+            turret: {
+                id: 'turret', name: 'タレット', category: 'action', icon: '🗼',
+                color: '#fbbf24', secondary: '#fef08a', manaCost: 22,
+                desc: '最寄りの敵を自動迎撃する固定砲台を設置'
+            },
+            hole: {
+                id: 'hole', name: '穴', category: 'action', icon: '🌀',
+                color: '#a855f7', secondary: '#f472b6', manaCost: 25,
+                desc: '敵を引きずり込むブラックホールを展開'
+            },
+            duplicate: {
+                id: 'duplicate', name: '複製', category: 'modifier', icon: '♊',
+                color: '#f472b6', secondary: '#fbcfe8', manaCost: 14,
+                desc: '弾・生成数・ビーム本数を +1 増加'
+            },
+            extend: {
+                id: 'extend', name: '延長', category: 'modifier', icon: '⏳',
+                color: '#60a5fa', secondary: '#dbeafe', manaCost: 11,
+                desc: 'サイズ・射程・持続時間を 1.5倍 に拡張'
+            },
+            bounce: {
+                id: 'bounce', name: 'バウンス', category: 'modifier', icon: '↩️',
+                color: '#2dd4bf', secondary: '#99f6e4', manaCost: 13,
+                desc: '画面端や敵に当たると跳ね返り再攻撃'
+            },
+            shield: {
+                id: 'shield', name: 'シールド', category: 'modifier', icon: '🛡️',
+                color: '#3b82f6', secondary: '#93c5fd', manaCost: 18,
+                desc: '発動時に一時的な無敵バリアを展開'
+            },
+            drain: {
+                id: 'drain', name: '吸血', category: 'modifier', icon: '🩸',
+                color: '#f43f5e', secondary: '#fda4af', manaCost: 14,
+                desc: '攻撃命中時に生命力(HP)を吸収回復'
+            }
+        };
+        const ALL_PATCH_KEYS = Object.keys(PATCH_DEFS);
+
+        // スロット構成を解析して合体魔法・消費マナ・推定威力を算出
+        function analyzeSpellSlots(slots) {
+            const active = slots.filter(Boolean).map(s => PATCH_DEFS[s.typeId]);
+            if (active.length === 0) {
+                return {
+                    isEmpty: true,
+                    title: '未編成スロット',
+                    synergyName: null,
+                    synergyDesc: 'パッチを配置してください',
+                    manaCost: 0,
+                    estimatedPower: 0,
+                    primaryColor: '#64748b',
+                    secondaryColor: '#94a3b8',
+                    isCombo: false,
+                    actions: [],
+                    elements: {},
+                    modifiers: {}
+                };
+            }
+
+            const elements = { fire: 0, ice: 0, thunder: 0, poison: 0, holy: 0 };
+            const actions = [];
+            const modifiers = { duplicate: 0, extend: 0, bounce: 0, shield: 0, drain: 0 };
+            let rawMana = 0;
+
+            active.forEach(p => {
+                rawMana += p.manaCost;
+                if (p.category === 'element') elements[p.id]++;
+                else if (p.category === 'action') actions.push(p.id);
+                else if (p.category === 'modifier') modifiers[p.id]++;
+            });
+
+            // アクション未指定時はデフォルトで基本魔弾（弓相当の単発弾）扱い
+            const uniqueActions = [...new Set(actions)];
+            const hasBow = uniqueActions.includes('bow');
+            const hasBeam = uniqueActions.includes('beam');
+            const hasSat = uniqueActions.includes('satellite');
+            const hasTurret = uniqueActions.includes('turret');
+            const hasHole = uniqueActions.includes('hole');
+
+            let isCombo = uniqueActions.length >= 2;
+            let synergyName = '';
+            let synergyDesc = '';
+            let comboPowerMult = 1.0;
+            let comboManaMult = 1.0;
+
+            if (isCombo) {
+                comboPowerMult = 1.35 + (uniqueActions.length - 2) * 0.25;
+                comboManaMult = 1.15;
+                if (hasBeam && hasHole) {
+                    synergyName = '✨ 合体：特異点収束レーザー';
+                    synergyDesc = 'ビームの先端に重力場を発生させながら極太レーザーを照射！';
+                } else if (hasBeam && hasSat) {
+                    synergyName = '✨ 合体：プリズム・サテライト光線';
+                    synergyDesc = '周回する衛星ビットからも連動レーザービームを同時発射！';
+                } else if (hasBeam && hasTurret) {
+                    synergyName = '✨ 合体：レーザー・フォートレス';
+                    synergyDesc = '設置した砲台が最寄りの敵へ持続レーザーを照射し続ける！';
+                } else if (hasSat && hasBow && !hasTurret && !hasHole) {
+                    synergyName = '✨ 合体：アストラル・ビット';
+                    synergyDesc = '周回する衛星ビットがカーソル方向へ光の矢を自動斉射！';
+                } else if (hasTurret && hasHole && !hasBow && !hasSat) {
+                    synergyName = '✨ 合体：グラビティ・タレット';
+                    synergyDesc = '敵を強力に吸い込む重力場を纏いながら高速連射する砲台！';
+                } else if (hasBow && hasHole && !hasSat && !hasTurret) {
+                    synergyName = '✨ 合体：特異点アロー';
+                    synergyDesc = '矢の着弾地点にミニ・ブラックホールが即座に展開！';
+                } else if (hasTurret && hasSat) {
+                    synergyName = '✨ 合体：オービタル・フォートレス';
+                    synergyDesc = '衛星の防衛オーブを纏った強化砲台が周囲を殲滅！';
+                } else {
+                    synergyName = '✨ 合体：多重魔導リンク';
+                    synergyDesc = '全アクション特性が融合し、虹色のプリズム魔力を解放！';
+                }
+            } else {
+                const single = uniqueActions[0] || 'bolt';
+                const names = {
+                    bow: '魔導の弓矢',
+                    beam: '収束エーテルビーム',
+                    satellite: '守護衛星陣',
+                    turret: '自律魔導砲台',
+                    hole: '事象の地平線',
+                    bolt: 'エーテル魔弾'
+                };
+                synergyName = names[single];
+                synergyDesc = uniqueActions.length > 0
+                    ? PATCH_DEFS[single].desc
+                    : '基本魔弾を発射（アクションパッチ追加で進化）';
+            }
+
+            // 属性重複ボーナス
+            const totalElemCount = elements.fire + elements.ice + elements.thunder + elements.poison + elements.holy;
+            const elemMultiplier = 1 + totalElemCount * 0.42;
+
+            // カラー決定
+            let primaryColor = '#38bdf8';
+            let secondaryColor = '#a855f7';
+            const elemEntries = [
+                { key: 'fire', count: elements.fire },
+                { key: 'ice', count: elements.ice },
+                { key: 'thunder', count: elements.thunder },
+                { key: 'poison', count: elements.poison },
+                { key: 'holy', count: elements.holy }
+            ].sort((a, b) => b.count - a.count);
+
+            if (elemEntries[0].count > 0) {
+                primaryColor = PATCH_DEFS[elemEntries[0].key].color;
+                secondaryColor = PATCH_DEFS[elemEntries[0].key].secondary;
+            } else if (uniqueActions.length > 0) {
+                primaryColor = PATCH_DEFS[uniqueActions[0]].color;
+                secondaryColor = PATCH_DEFS[uniqueActions[0]].secondary;
+            }
+
+            // たくさん詰め込むほどマナ負荷が増大する計算
+            const overloadPenalty = active.length >= 4 ? 1.25 : active.length === 3 ? 1.1 : 1.0;
+            const manaCost = Math.round((rawMana + 6) * comboManaMult * overloadPenalty);
+
+            const basePower = 24;
+            const countMult = 1 + modifiers.duplicate * 0.65;
+            const extMult = 1 + modifiers.extend * 0.25;
+            const estimatedPower = Math.round(basePower * elemMultiplier * comboPowerMult * countMult * extMult);
+
+            return {
+                isEmpty: false,
+                synergyName,
+                synergyDesc,
+                manaCost,
+                estimatedPower,
+                primaryColor,
+                secondaryColor,
+                isCombo,
+                actions: uniqueActions,
+                elements,
+                modifiers
+            };
+        }
+
+        // ==========================================
+        // 2.5 スキルツリー定義
+        // ==========================================
+        const SKILL_TREE_DEFS = [
+            {
+                id: 'maxHp',
+                name: '生命の器（最大HP増加）',
+                icon: '❤️',
+                color: '#f43f5e',
+                maxLevel: 5,
+                baseCost: 2,
+                costStep: 1,
+                desc: '最大HPと初期HPが +25 増加する',
+                effectText: (lv) => `現在効果: 最大HP +${lv * 25}`
+            },
+            {
+                id: 'manaRegen',
+                name: '魔力循環（MP再生速度UP）',
+                icon: '⚡',
+                color: '#00f3ff',
+                maxLevel: 5,
+                baseCost: 2,
+                costStep: 1,
+                desc: 'マナの自動回復速度が +4.5/s 上昇する',
+                effectText: (lv) => `現在効果: MP再生 +${(lv * 4.5).toFixed(1)}/s`
+            },
+            {
+                id: 'slotExpand',
+                name: '魔導書拡張（スロット拡張）',
+                icon: '📖',
+                color: '#a855f7',
+                maxLevel: 2,
+                baseCost: 3,
+                costStep: 3,
+                desc: 'Lv1: 魔法スロットが3つ→4つに増加 / Lv2: 各スペルの枠数が4枠→5枠に増加',
+                effectText: (lv) => lv === 0 ? '現在効果: 3スペル × 4枠' : lv === 1 ? '現在効果: 4スペル × 4枠' : '現在効果: 4スペル × 5枠（最大）'
+            },
+            {
+                id: 'dropRate',
+                name: '幸運の導き（ドロップ率UP）',
+                icon: '🍀',
+                color: '#10b981',
+                maxLevel: 5,
+                baseCost: 2,
+                costStep: 1,
+                desc: '敵撃破時のパッチ・回復・強化オーブのドロップ率が +12% 上昇',
+                effectText: (lv) => `現在効果: ドロップ率 +${lv * 12}%`
+            }
+        ];
+
+        // ==========================================
+        // 3. ゲーム状態管理 & キャンバスセットアップ
+        // ==========================================
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let width = window.innerWidth;
+        let height = window.innerHeight;
+
+        function resizeCanvas() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        const MAX_PARTICLES = 320;
+        const MAX_PROJECTILES = 160;
+        const MAX_DAMAGE_NUMBERS = 55;
+
+        // ==========================================
+        // 高速・超高画質 擬似ブルーム用グロウテクスチャ事前生成
+        // ==========================================
+        const glowSpriteCache = {};
+        function getGlowSprite(color) {
+            if (glowSpriteCache[color]) return glowSpriteCache[color];
+            const size = 96;
+            const c = document.createElement('canvas');
+            c.width = size;
+            c.height = size;
+            const gctx = c.getContext('2d');
+            const half = size / 2;
+            const grad = gctx.createRadialGradient(half, half, 2, half, half, half);
+            grad.addColorStop(0, '#ffffff');
+            grad.addColorStop(0.22, color);
+            grad.addColorStop(0.55, color + '66');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            gctx.fillStyle = grad;
+            gctx.fillRect(0, 0, size, size);
+            glowSpriteCache[color] = c;
+            return c;
+        }
+
+        const state = {
+            mode: 'title', // 'title' | 'playing' | 'craft' | 'skill' | 'gameover'
+            previousMode: 'playing',
+            wave: 1,
+            score: 0,
+            kills: 0,
+            skillPoints: 2, // 初期SPを2付与してすぐ試せるようにする
+            skills: {
+                maxHp: 0,
+                manaRegen: 0,
+                slotExpand: 0,
+                dropRate: 0
+            },
+            hitstopTimer: 0,
+            shakeTimer: 0,
+            shakeIntensity: 0,
+            flashColor: null,
+            flashAlpha: 0,
+            fieldSpawnTimer: 6.0,
+            waveTransitionTimer: 0,
+            selectedInventoryIndex: null,
+
+            player: {
+                x: 0,
+                y: 0,
+                vx: 0,
+                vy: 0,
+                radius: 16,
+                speed: 255,
+                hp: 100,
+                maxHp: 100,
+                mana: 100,
+                maxMana: 100,
+                manaRegen: 18,
+                manaUpgradeLevel: 1,
+                manaRegenBuffTimer: 0,
+                aimAngle: 0,
+                invuln: 0,
+                shieldTimer: 0,
+                trail: []
+            },
+
+            // スペル配列（スキルで3→4スロット、4→5枠に拡張可能）
+            spells: [
+                [null, null, null, null],
+                [null, null, null, null],
+                [null, null, null, null]
+            ],
+            spellCooldowns: [0, 0, 0],
+            inventory: [],
+
+            enemies: [],
+            projectiles: [],
+            beams: [],
+            satellites: [],
+            turrets: [],
+            blackHoles: [],
+            drops: [],
+            particles: [],
+            magicCircles: [],
+            damageNumbers: [],
+            dust: []
+        };
+
+        // 背景のダスト初期化
+        for (let i = 0; i < 85; i++) {
+            state.dust.push({
+                x: Math.random() * 2000 - 1000,
+                y: Math.random() * 2000 - 1000,
+                size: 1.2 + Math.random() * 2.6,
+                alpha: 0.25 + Math.random() * 0.55,
+                parallax: 0.2 + Math.random() * 0.55,
+                twinkle: Math.random() * Math.PI * 2,
+                color: i % 3 === 0 ? '#00f3ff' : i % 3 === 1 ? '#c084fc' : '#ffbe0b'
+            });
+        }
+
+        function initGame() {
+            state.wave = 1;
+            state.score = 0;
+            state.kills = 0;
+            state.hitstopTimer = 0;
+            state.shakeTimer = 0;
+            state.flashAlpha = 0;
+            state.fieldSpawnTimer = 5.0;
+            state.waveTransitionTimer = 0;
+            state.selectedInventoryIndex = null;
+
+            const bonusHp = state.skills.maxHp * 25;
+            const bonusRegen = state.skills.manaRegen * 4.5;
+
+            Object.assign(state.player, {
+                x: 0, y: 0, vx: 0, vy: 0,
+                hp: 100 + bonusHp, maxHp: 100 + bonusHp,
+                mana: 100, maxMana: 100,
+                manaRegen: 18 + bonusRegen,
+                manaUpgradeLevel: 1 + state.skills.manaRegen,
+                manaRegenBuffTimer: 0,
+                invuln: 0,
+                shieldTimer: 0,
+                trail: []
+            });
+
+            // スキルによるスロット数・枠数反映
+            const spellCount = state.skills.slotExpand >= 1 ? 4 : 3;
+            const slotSize = state.skills.slotExpand >= 2 ? 5 : 4;
+
+            state.spells = Array.from({ length: spellCount }, () => Array(slotSize).fill(null));
+            state.spellCooldowns = Array(spellCount).fill(0);
+
+            // 初期装備セット
+            state.spells[0][0] = { typeId: 'fire' };
+            state.spells[0][1] = { typeId: 'bow' };
+            state.spells[1][0] = { typeId: 'ice' };
+            state.spells[1][1] = { typeId: 'satellite' };
+            if (spellCount >= 4) {
+                state.spells[2][0] = { typeId: 'poison' };
+                state.spells[2][1] = { typeId: 'beam' };
+            }
+
+            // 初期所持パッチ（新パッチも含めて体験しやすく配置）
+            state.inventory = [
+                { typeId: 'fire' },
+                { typeId: 'ice' },
+                { typeId: 'poison' },
+                { typeId: 'holy' },
+                { typeId: 'bow' },
+                { typeId: 'beam' },
+                { typeId: 'satellite' },
+                { typeId: 'duplicate' },
+                { typeId: 'bounce' }
+            ];
+
+            state.enemies = [];
+            state.projectiles = [];
+            state.beams = [];
+            state.satellites = [];
+            state.turrets = [];
+            state.blackHoles = [];
+            state.drops = [];
+            state.particles = [];
+            state.magicCircles = [];
+            state.damageNumbers = [];
+
+            spawnWave(1);
+            renderSpellBar();
+            updateHUD();
+        }
+
+        // ==========================================
+        // 4. 演出・エフェクトヘルパー（軽量化済）
+        // ==========================================
+        function triggerShake(intensity, duration) {
+            state.shakeIntensity = Math.max(state.shakeIntensity, intensity);
+            state.shakeTimer = Math.max(state.shakeTimer, duration);
+        }
+
+        function triggerScreenFlash(color, alpha = 0.25) {
+            state.flashColor = color;
+            state.flashAlpha = alpha;
+        }
+
+        function spawnMagicCircle(x, y, maxRadius, color, secondary, duration = 0.45, isDouble = false) {
+            if (state.magicCircles.length > 24) state.magicCircles.shift();
+            state.magicCircles.push({
+                x, y,
+                radius: maxRadius * 0.2,
+                maxRadius,
+                color,
+                secondary,
+                life: duration,
+                maxLife: duration,
+                rot: Math.random() * Math.PI,
+                isDouble
+            });
+        }
+
+        function spawnParticles(x, y, count, color, secondary, minSpd, maxSpd, life = 0.4, size = 2.8) {
+            const available = MAX_PARTICLES - state.particles.length;
+            const actualCount = Math.min(count, Math.max(0, available));
+            for (let i = 0; i < actualCount; i++) {
+                const ang = Math.random() * Math.PI * 2;
+                const spd = minSpd + Math.random() * (maxSpd - minSpd);
+                state.particles.push({
+                    x, y,
+                    vx: Math.cos(ang) * spd,
+                    vy: Math.sin(ang) * spd,
+                    life: life * (0.7 + Math.random() * 0.6),
+                    maxLife: life,
+                    size: size * (0.7 + Math.random() * 0.6),
+                    color: i % 2 === 0 ? color : secondary
+                });
+            }
+        }
+
+        function spawnDamageNumber(x, y, amount, color = '#ffffff', isCrit = false) {
+            if (state.damageNumbers.length >= MAX_DAMAGE_NUMBERS) {
+                state.damageNumbers.shift();
+            }
+            state.damageNumbers.push({
+                x: x + (Math.random() - 0.5) * 16,
+                y: y - 12,
+                vy: -45 - Math.random() * 20,
+                text: Math.round(amount).toString(),
+                color,
+                isCrit,
+                life: 0.7,
+                maxLife: 0.7
+            });
+        }
+
+        function showToast(msg, color = '#00f3ff') {
+            const container = document.getElementById('toastContainer');
+            const el = document.createElement('div');
+            el.className = 'glass-panel px-4 py-1.5 rounded-full text-xs font-bold shadow-lg transition-all duration-300';
+            el.style.borderColor = color;
+            el.style.color = color;
+            el.textContent = msg;
+            container.appendChild(el);
+            setTimeout(() => {
+                el.style.opacity = '0';
+                el.style.transform = 'translateY(-8px)';
+                setTimeout(() => el.remove(), 300);
+            }, 2200);
+        }
+
+        // ==========================================
+        // 5. 魔法発動システム（プレイヤー & CPU共通）
+        // ==========================================
+        function castCustomSpell(owner, slots, targetX, targetY, isPlayer = true) {
+            const info = analyzeSpellSlots(slots);
+            if (info.isEmpty) return false;
+
+            if (isPlayer) {
+                if (state.player.mana < info.manaCost) {
+                    showToast('マナが不足しています！', '#f43f5e');
+                    return false;
+                }
+                state.player.mana -= info.manaCost;
+            }
+
+            const baseAngle = Math.atan2(targetY - owner.y, targetX - owner.x);
+            const count = 1 + info.modifiers.duplicate;
+            const sizeMult = Math.pow(1.5, info.modifiers.extend);
+            const durMult = Math.pow(1.5, info.modifiers.extend);
+
+            // シールド付与
+            if (info.modifiers.shield > 0 && isPlayer) {
+                state.player.shieldTimer = Math.max(state.player.shieldTimer, 2.5 * info.modifiers.shield * durMult);
+                showToast('🛡️ エーテル・シールド展開！', '#3b82f6');
+            }
+
+            // 魔法陣エフェクト
+            spawnMagicCircle(
+                owner.x, owner.y,
+                info.isCombo ? 84 : 52,
+                info.primaryColor,
+                info.secondaryColor,
+                info.isCombo ? 0.65 : 0.45,
+                info.isCombo
+            );
+            spawnParticles(owner.x, owner.y, info.isCombo ? 20 : 10, info.primaryColor, info.secondaryColor, 40, 160, 0.45, 3.2);
+
+            if (isPlayer) {
+                sfx.playCast(info.isCombo);
+                if (info.isCombo) {
+                    triggerScreenFlash(info.primaryColor, 0.22);
+                    triggerShake(7, 0.18);
+                }
+            }
+
+            const hasBow = info.actions.includes('bow') || info.actions.length === 0;
+            const hasBeam = info.actions.includes('beam');
+            const hasSat = info.actions.includes('satellite');
+            const hasTurret = info.actions.includes('turret');
+            const hasHole = info.actions.includes('hole');
+
+            const dmgPerUnit = info.estimatedPower / Math.max(1, count * 0.75);
+
+            // 0) ビーム（またはビーム合体）
+            if (hasBeam) {
+                for (let i = 0; i < count; i++) {
+                    if (state.beams.length > 12) state.beams.shift();
+                    const spread = (i - (count - 1) / 2) * 0.16;
+                    state.beams.push({
+                        owner,
+                        isPlayer,
+                        angleOffset: spread,
+                        aimAngle: baseAngle + spread,
+                        length: 340 * sizeMult,
+                        width: (info.isCombo ? 18 : 13) * Math.min(1.6, sizeMult),
+                        damage: dmgPerUnit * 0.65,
+                        life: 1.15 * durMult,
+                        maxLife: 1.15 * durMult,
+                        tickTimer: 0.12,
+                        spawnHoleAtTip: hasHole,
+                        bounceCount: info.modifiers.bounce,
+                        elements: info.elements,
+                        modifiers: info.modifiers,
+                        color: info.primaryColor,
+                        secondary: info.secondaryColor,
+                        isCombo: info.isCombo
+                    });
+                }
+            }
+
+            // 1) 衛星（または 衛星＋弓 / 衛星＋ビーム のアストラル・ビット）
+            if (hasSat) {
+                const satCount = count * 2;
+                for (let i = 0; i < satCount; i++) {
+                    if (state.satellites.length > 24) state.satellites.shift();
+                    state.satellites.push({
+                        owner,
+                        isPlayer,
+                        angle: (Math.PI * 2 / satCount) * i,
+                        orbitRadius: 54 * Math.min(1.4, sizeMult),
+                        radius: 8 * Math.min(1.5, sizeMult),
+                        damage: dmgPerUnit * 0.65,
+                        life: 7.5 * durMult,
+                        shootTimer: 0.45 + i * 0.15,
+                        canShootBow: hasBow || hasBeam,
+                        elements: info.elements,
+                        modifiers: info.modifiers,
+                        color: info.primaryColor,
+                        secondary: info.secondaryColor,
+                        isCombo: info.isCombo
+                    });
+                }
+            }
+
+            // 2) タレット（または タレット＋穴 のグラビティ・タレット）
+            if (hasTurret) {
+                for (let i = 0; i < count; i++) {
+                    if (state.turrets.length > 12) state.turrets.shift();
+                    const spread = (i - (count - 1) / 2) * 0.45;
+                    const placeDist = 55;
+                    state.turrets.push({
+                        x: owner.x + Math.cos(baseAngle + spread) * placeDist,
+                        y: owner.y + Math.sin(baseAngle + spread) * placeDist,
+                        isPlayer,
+                        radius: 13 * Math.min(1.4, sizeMult),
+                        damage: dmgPerUnit * 0.55,
+                        life: 8.0 * durMult,
+                        fireTimer: 0.2,
+                        hasGravityHole: hasHole,
+                        hasOrb: hasSat,
+                        hasBeam: hasBeam,
+                        elements: info.elements,
+                        modifiers: info.modifiers,
+                        color: info.primaryColor,
+                        secondary: info.secondaryColor,
+                        isCombo: info.isCombo,
+                        rot: 0
+                    });
+                }
+            }
+
+            // 3) 単独ブラックホール（タレットや弓・ビームと合体していない場合、または純粋な穴）
+            if (hasHole && !hasTurret && !hasBow && !hasBeam) {
+                for (let i = 0; i < count; i++) {
+                    if (state.blackHoles.length > 10) state.blackHoles.shift();
+                    const spread = (i - (count - 1) / 2) * 0.35;
+                    const dist = Math.min(280, Math.hypot(targetX - owner.x, targetY - owner.y));
+                    state.blackHoles.push({
+                        x: owner.x + Math.cos(baseAngle + spread) * dist,
+                        y: owner.y + Math.sin(baseAngle + spread) * dist,
+                        isPlayer,
+                        radius: 78 * sizeMult,
+                        damage: dmgPerUnit * 0.45,
+                        life: 4.5 * durMult,
+                        tickTimer: 0.25,
+                        color: info.primaryColor,
+                        secondary: info.secondaryColor,
+                        isCombo: info.isCombo,
+                        rot: 0
+                    });
+                }
+            }
+
+            // 4) 弓（高速魔力矢 / 特異点アロー / 光貫通 / バウンス対応）
+            if (hasBow && !hasSat) {
+                const holySpeedBonus = info.elements.holy * 240;
+                const spd = (560 + info.elements.thunder * 110 + holySpeedBonus);
+                for (let i = 0; i < count; i++) {
+                    if (state.projectiles.length >= MAX_PROJECTILES) state.projectiles.shift();
+                    const spread = (i - (count - 1) / 2) * 0.14;
+                    const ang = baseAngle + spread;
+                    state.projectiles.push({
+                        x: owner.x + Math.cos(ang) * 20,
+                        y: owner.y + Math.sin(ang) * 20,
+                        vx: Math.cos(ang) * spd,
+                        vy: Math.sin(ang) * spd,
+                        isPlayer,
+                        radius: 6 * Math.min(1.6, sizeMult),
+                        damage: dmgPerUnit,
+                        life: 1.5 * durMult,
+                        spawnHoleOnHit: hasHole,
+                        pierceCount: info.elements.holy * 2,
+                        bouncesLeft: info.modifiers.bounce * 2,
+                        hitIds: new Set(),
+                        elements: info.elements,
+                        modifiers: info.modifiers,
+                        color: info.primaryColor,
+                        secondary: info.secondaryColor,
+                        isCombo: info.isCombo,
+                        trail: []
+                    });
+                }
+            }
+
+            return true;
+        }
+
+        // ==========================================
+        // 6. ウェーブ＆敵AIスポーンシステム
+        // ==========================================
+        const RIVAL_ARCHETYPES = [
+            { title: '紅蓮の魔導射手', patches: ['fire', 'bow', 'duplicate'], color: '#ff4d2a', secondary: '#ffbe0b' },
+            { title: '蒼氷の衛星術師', patches: ['ice', 'satellite', 'bow'], color: '#00f3ff', secondary: '#bae6fd' },
+            { title: '紫電の砲台技師', patches: ['thunder', 'turret', 'extend'], color: '#c084fc', secondary: '#38bdf8' },
+            { title: '虚空の重力使徒', patches: ['hole', 'bow', 'fire'], color: '#a855f7', secondary: '#f472b6' },
+            { title: '星屑の双剣魔導士', patches: ['satellite', 'duplicate', 'thunder'], color: '#34d399', secondary: '#fef08a' }
+        ];
+
+        function spawnWave(waveNum) {
+            // 1. CPUライバル（魔法使い型）スポーン
+            const rivalCount = Math.min(4, 1 + Math.floor((waveNum + 1) / 2));
+            for (let i = 0; i < rivalCount; i++) {
+                const arch = RIVAL_ARCHETYPES[(waveNum + i - 1) % RIVAL_ARCHETYPES.length];
+                const ang = (Math.PI * 2 / rivalCount) * i + Math.random() * 0.5;
+                const dist = 340 + Math.random() * 140;
+
+                // ウェーブが進むとライバルの所持パッチも強化
+                const equipped = arch.patches.slice(0, Math.min(4, 2 + Math.floor(waveNum / 2)));
+                if (waveNum >= 3 && equipped.length < 4) {
+                    equipped.push(ALL_PATCH_KEYS[Math.floor(Math.random() * ALL_PATCH_KEYS.length)]);
+                }
+
+                state.enemies.push({
+                    type: 'rival',
+                    title: arch.title,
+                    x: state.player.x + Math.cos(ang) * dist,
+                    y: state.player.y + Math.sin(ang) * dist,
+                    radius: 17,
+                    hp: 75 + waveNum * 28,
+                    maxHp: 75 + waveNum * 28,
+                    speed: 145 + Math.min(50, waveNum * 5),
+                    color: arch.color,
+                    secondary: arch.secondary,
+                    equippedPatches: equipped,
+                    castCooldown: 1.6 + Math.random() * 1.2,
+                    strafeDir: Math.random() < 0.5 ? 1 : -1,
+                    strafeTimer: 1.5 + Math.random() * 2,
+                    slowTimer: 0,
+                    poisonTimer: 0,
+                    poisonDps: 0,
+                    flashTimer: 0,
+                    rot: 0
+                });
+            }
+
+            // 2. 突撃型（幾何学チャージャー）スポーン
+            const chargerCount = 2 + Math.floor(waveNum * 0.8);
+            for (let i = 0; i < chargerCount; i++) {
+                const ang = Math.random() * Math.PI * 2;
+                const dist = 300 + Math.random() * 240;
+                state.enemies.push({
+                    type: 'charger',
+                    title: '突撃型・幾何学体',
+                    x: state.player.x + Math.cos(ang) * dist,
+                    y: state.player.y + Math.sin(ang) * dist,
+                    radius: 13,
+                    hp: 35 + waveNum * 12,
+                    maxHp: 35 + waveNum * 12,
+                    speed: 225 + Math.min(65, waveNum * 8),
+                    damage: 12,
+                    color: '#38bdf8',
+                    secondary: '#bae6fd',
+                    slowTimer: 0,
+                    poisonTimer: 0,
+                    poisonDps: 0,
+                    flashTimer: 0,
+                    rot: 0,
+                    trail: []
+                });
+            }
+
+            // 3. 自爆型（ボラタイル）スポーン
+            const volatileCount = 1 + Math.floor(waveNum * 0.6);
+            for (let i = 0; i < volatileCount; i++) {
+                const ang = Math.random() * Math.PI * 2;
+                const dist = 320 + Math.random() * 200;
+                state.enemies.push({
+                    type: 'volatile',
+                    title: '自爆型・ボラタイル',
+                    x: state.player.x + Math.cos(ang) * dist,
+                    y: state.player.y + Math.sin(ang) * dist,
+                    radius: 12,
+                    hp: 25 + waveNum * 8,
+                    maxHp: 25 + waveNum * 8,
+                    speed: 185,
+                    damage: 32,
+                    color: '#f43f5e',
+                    secondary: '#ffd166',
+                    fuseTimer: 0,
+                    isFusing: false,
+                    slowTimer: 0,
+                    poisonTimer: 0,
+                    poisonDps: 0,
+                    flashTimer: 0,
+                    rot: 0
+                });
+            }
+        }
+
+        function spawnRandomFieldPatch() {
+            if (state.drops.length > 22) return;
+            const roll = Math.random();
+            const ang = Math.random() * Math.PI * 2;
+            const dist = 160 + Math.random() * 320;
+            const fx = state.player.x + Math.cos(ang) * dist;
+            const fy = state.player.y + Math.sin(ang) * dist;
+
+            if (roll < 0.24) {
+                state.drops.push({
+                    x: fx, y: fy, vx: 0, vy: 0,
+                    kind: 'heal', bobPhase: 0, life: 30
+                });
+                spawnMagicCircle(fx, fy, 34, '#f43f5e', '#ffffff', 0.4, false);
+                return;
+            } else if (roll < 0.44) {
+                state.drops.push({
+                    x: fx, y: fy, vx: 0, vy: 0,
+                    kind: 'mana_buff', bobPhase: 0, life: 30
+                });
+                spawnMagicCircle(fx, fy, 34, '#00f3ff', '#fbbf24', 0.4, false);
+                return;
+            }
+
+            const randKey = ALL_PATCH_KEYS[Math.floor(Math.random() * ALL_PATCH_KEYS.length)];
+            state.drops.push({
+                x: fx,
+                y: fy,
+                vx: 0,
+                vy: 0,
+                kind: 'patch',
+                typeId: randKey,
+                bobPhase: 0,
+                life: 32,
+                isFieldChest: true
+            });
+            spawnMagicCircle(fx, fy, 40, PATCH_DEFS[randKey].color, '#ffd700', 0.45, true);
+        }
+
+        function onEnemyKilled(enemy) {
+            state.kills++;
+            state.score += (enemy.type === 'rival' ? 300 : 100) * state.wave;
+            if (enemy.type === 'rival') {
+                state.skillPoints += 1;
+            }
+            sfx.playExplosion();
+            triggerShake(enemy.type === 'rival' ? 10 : 5, 0.18);
+            spawnMagicCircle(enemy.x, enemy.y, enemy.type === 'rival' ? 68 : 42, enemy.color, enemy.secondary, 0.45, enemy.type === 'rival');
+            spawnParticles(enemy.x, enemy.y, enemy.type === 'rival' ? 28 : 16, enemy.color, enemy.secondary, 60, 240, 0.52, 3.6);
+
+            const dropBonus = state.skills.dropRate * 0.12;
+
+            // ライバルが持っていたパッチを地面にポロッとドロップ
+            if (enemy.type === 'rival' && enemy.equippedPatches && enemy.equippedPatches.length > 0) {
+                const droppedId = enemy.equippedPatches[Math.floor(Math.random() * enemy.equippedPatches.length)];
+                const ang = Math.random() * Math.PI * 2;
+                state.drops.push({
+                    x: enemy.x,
+                    y: enemy.y,
+                    vx: Math.cos(ang) * 120,
+                    vy: Math.sin(ang) * 120,
+                    kind: 'patch',
+                    typeId: droppedId,
+                    bobPhase: 0,
+                    life: 35
+                });
+            } else if (Math.random() < 0.12 + dropBonus) {
+                // 通常敵からもドロップ率アップスキルに応じてランダムパッチドロップ
+                const randPatch = ALL_PATCH_KEYS[Math.floor(Math.random() * ALL_PATCH_KEYS.length)];
+                state.drops.push({
+                    x: enemy.x, y: enemy.y,
+                    vx: (Math.random() - 0.5) * 100, vy: (Math.random() - 0.5) * 100,
+                    kind: 'patch', typeId: randPatch, bobPhase: 0, life: 35
+                });
+            }
+
+            // 回復＆MP強化オーブドロップ判定
+            const dropRoll = Math.random();
+            if (dropRoll < 0.30 + dropBonus * 0.6) {
+                state.drops.push({
+                    x: enemy.x, y: enemy.y,
+                    vx: (Math.random() - 0.5) * 90, vy: (Math.random() - 0.5) * 90,
+                    kind: 'heal', bobPhase: Math.random() * Math.PI * 2, life: 30
+                });
+            } else if (dropRoll < 0.50 + dropBonus) {
+                state.drops.push({
+                    x: enemy.x, y: enemy.y,
+                    vx: (Math.random() - 0.5) * 90, vy: (Math.random() - 0.5) * 90,
+                    kind: 'mana_buff', bobPhase: Math.random() * Math.PI * 2, life: 30
+                });
+            }
+        }
+
+        function damageEnemy(enemy, amount, elements = {}, modifiers = {}, isPlayerSource = true) {
+            if (enemy.hp <= 0) return;
+
+            let totalDmg = amount;
+            if (elements.fire > 0) totalDmg *= (1 + elements.fire * 0.22);
+            if (elements.holy > 0) totalDmg *= (1 + elements.holy * 0.15);
+            if (elements.ice > 0) enemy.slowTimer = Math.max(enemy.slowTimer, 2.2 * elements.ice);
+            if (elements.poison > 0) {
+                enemy.poisonTimer = Math.max(enemy.poisonTimer, 3.5);
+                enemy.poisonDps = Math.max(enemy.poisonDps, (8 + elements.poison * 7));
+            }
+
+            enemy.hp -= totalDmg;
+            enemy.flashTimer = 0.08;
+
+            const dmgColor = elements.fire > 0 ? '#ffbe0b'
+                : elements.ice > 0 ? '#00f3ff'
+                : elements.thunder > 0 ? '#c084fc'
+                : elements.poison > 0 ? '#10b981'
+                : elements.holy > 0 ? '#fef08a'
+                : '#ffffff';
+            spawnDamageNumber(enemy.x, enemy.y, totalDmg, dmgColor, totalDmg >= 45);
+
+            // 吸血効果
+            if (isPlayerSource && modifiers.drain > 0) {
+                const healAmt = Math.min(8, totalDmg * 0.07 * modifiers.drain);
+                state.player.hp = Math.min(state.player.maxHp, state.player.hp + healAmt);
+            }
+
+            // 炎爆発
+            if (elements.fire > 0 && Math.random() < 0.55) {
+                const blastRadius = 64 + elements.fire * 16;
+                spawnMagicCircle(enemy.x, enemy.y, blastRadius, '#ff4d2a', '#ffbe0b', 0.35, true);
+                spawnParticles(enemy.x, enemy.y, 16, '#ff4d2a', '#ffbe0b', 60, 210, 0.4, 3.4);
+                for (let i = 0; i < state.enemies.length; i++) {
+                    const other = state.enemies[i];
+                    if (other !== enemy && other.hp > 0) {
+                        const d = Math.hypot(other.x - enemy.x, other.y - enemy.y);
+                        if (d <= blastRadius) {
+                            other.hp -= totalDmg * 0.35;
+                            other.flashTimer = 0.06;
+                        }
+                    }
+                }
+            }
+
+            // 雷連鎖
+            if (elements.thunder > 0 && Math.random() < 0.5) {
+                for (let i = 0; i < state.enemies.length; i++) {
+                    const other = state.enemies[i];
+                    if (other !== enemy && other.hp > 0) {
+                        const d = Math.hypot(other.x - enemy.x, other.y - enemy.y);
+                        if (d <= 140) {
+                            other.hp -= totalDmg * 0.4;
+                            other.flashTimer = 0.06;
+                            spawnDamageNumber(other.x, other.y, totalDmg * 0.4, '#c084fc', false);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (isPlayerSource && totalDmg >= 35) {
+                state.hitstopTimer = 0.025;
+            }
+        }
+
+        // ==========================================
+        // 7. 入力コントロール
+        // ==========================================
+        const keys = {};
+        const mouse = { x: width / 2, y: height / 2 };
+
+        window.addEventListener('keydown', (e) => {
+            const k = e.key.toLowerCase();
+            keys[k] = true;
+
+            if (k === 'c') {
+                if (state.mode === 'playing' || state.mode === 'craft' || state.mode === 'skill') {
+                    toggleCraftModal();
+                }
+            } else if (k === 'k') {
+                if (state.mode === 'playing' || state.mode === 'skill' || state.mode === 'craft') {
+                    toggleSkillModal();
+                }
+            } else if (k === 'escape') {
+                if (state.mode === 'craft') toggleCraftModal();
+                else if (state.mode === 'skill') toggleSkillModal();
+            }
+
+            if (state.mode === 'playing') {
+                if (k === '1') triggerSpellSlot(0);
+                if (k === '2') triggerSpellSlot(1);
+                if (k === '3') triggerSpellSlot(2);
+                if (k === '4' && state.spells.length >= 4) triggerSpellSlot(3);
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (state.mode !== 'playing') return;
+            sfx.init();
+            if (e.button === 0) triggerSpellSlot(0);
+            else if (e.button === 2) triggerSpellSlot(1);
+        });
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // タッチ操作対応
+        canvas.addEventListener('touchstart', (e) => {
+            if (state.mode !== 'playing') return;
+            sfx.init();
+            const touch = e.touches[0];
+            mouse.x = touch.clientX;
+            mouse.y = touch.clientY;
+            triggerSpellSlot(0);
+        }, { passive: true });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (state.mode !== 'playing') return;
+            const touch = e.touches[0];
+            mouse.x = touch.clientX;
+            mouse.y = touch.clientY;
+        }, { passive: true });
+
+        function triggerSpellSlot(idx) {
+            if (state.spellCooldowns[idx] > 0) return;
+            const worldTargetX = state.player.x + (mouse.x - width / 2);
+            const worldTargetY = state.player.y + (mouse.y - height / 2);
+            const success = castCustomSpell(state.player, state.spells[idx], worldTargetX, worldTargetY, true);
+            if (success) {
+                state.spellCooldowns[idx] = 0.35;
+            }
+        }
+
+        // ==========================================
+        // 8. メイン更新ループ（メモリ最適化＆確実なクリーンアップ）
+        // ==========================================
+        function update(dt) {
+            if (state.mode !== 'playing') return;
+
+            if (state.hitstopTimer > 0) {
+                state.hitstopTimer -= dt;
+                return;
+            }
+
+            const p = state.player;
+
+            // クールダウン＆バフ更新
+            for (let i = 0; i < state.spellCooldowns.length; i++) {
+                if (state.spellCooldowns[i] > 0) state.spellCooldowns[i] = Math.max(0, state.spellCooldowns[i] - dt);
+            }
+            if (p.invuln > 0) p.invuln = Math.max(0, p.invuln - dt);
+            if (p.shieldTimer > 0) p.shieldTimer = Math.max(0, p.shieldTimer - dt);
+            if (p.manaRegenBuffTimer > 0) p.manaRegenBuffTimer = Math.max(0, p.manaRegenBuffTimer - dt);
+
+            // マナ自動回復
+            const regenMult = p.manaRegenBuffTimer > 0 ? 2.5 : 1.0;
+            p.mana = Math.min(p.maxMana, p.mana + p.manaRegen * regenMult * dt);
+
+            // プレイヤー移動
+            let mx = 0, my = 0;
+            if (keys['w'] || keys['arrowup']) my -= 1;
+            if (keys['s'] || keys['arrowdown']) my += 1;
+            if (keys['a'] || keys['arrowleft']) mx -= 1;
+            if (keys['d'] || keys['arrowright']) mx += 1;
+
+            if (mx !== 0 || my !== 0) {
+                const len = Math.hypot(mx, my);
+                mx /= len;
+                my /= len;
+            }
+            p.vx = mx * p.speed;
+            p.vy = my * p.speed;
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.aimAngle = Math.atan2(mouse.y - height / 2, mouse.x - width / 2);
+
+            // プレイヤー残像トレイル（最大8点に制限）
+            p.trail.push({ x: p.x, y: p.y });
+            if (p.trail.length > 8) p.trail.shift();
+
+            // フィールドアイテム定期出現
+            state.fieldSpawnTimer -= dt;
+            if (state.fieldSpawnTimer <= 0) {
+                state.fieldSpawnTimer = 8.5;
+                spawnRandomFieldPatch();
+            }
+
+            // ビーム（レーザー照射）の更新
+            for (let i = state.beams.length - 1; i >= 0; i--) {
+                const b = state.beams[i];
+                b.life -= dt;
+                if (b.life <= 0 || (b.owner && b.owner.hp <= 0)) {
+                    state.beams.splice(i, 1);
+                    continue;
+                }
+                const baseAim = b.isPlayer ? p.aimAngle : Math.atan2(p.y - b.owner.y, p.x - b.owner.x);
+                b.aimAngle = baseAim + b.angleOffset;
+                b.startX = b.owner.x + Math.cos(b.aimAngle) * 18;
+                b.startY = b.owner.y + Math.sin(b.aimAngle) * 18;
+                b.endX = b.startX + Math.cos(b.aimAngle) * b.length;
+                b.endY = b.startY + Math.sin(b.aimAngle) * b.length;
+
+                // 合体：特異点収束レーザー（ビーム＋穴）
+                if (b.spawnHoleAtTip && Math.random() < 0.08 && state.blackHoles.length < 10) {
+                    state.blackHoles.push({
+                        x: b.endX, y: b.endY,
+                        isPlayer: b.isPlayer,
+                        radius: 48,
+                        damage: b.damage * 0.35,
+                        life: 0.9,
+                        tickTimer: 0.2,
+                        color: b.color,
+                        secondary: b.secondary,
+                        isCombo: true,
+                        rot: 0
+                    });
+                }
+
+                b.tickTimer -= dt;
+                if (b.tickTimer <= 0) {
+                    b.tickTimer = 0.14;
+                    if (b.isPlayer) {
+                        for (let j = 0; j < state.enemies.length; j++) {
+                            const en = state.enemies[j];
+                            if (en.hp <= 0) continue;
+                            if (distToSegment(en.x, en.y, b.startX, b.startY, b.endX, b.endY) <= en.radius + b.width * 0.65) {
+                                damageEnemy(en, b.damage * 0.45, b.elements, b.modifiers, true);
+                                spawnParticles(en.x, en.y, 4, b.color, b.secondary, 40, 140, 0.25, 2.5);
+                            }
+                        }
+                    } else if (distToSegment(p.x, p.y, b.startX, b.startY, b.endX, b.endY) <= p.radius + b.width * 0.5) {
+                        damagePlayer(b.damage * 0.35);
+                    }
+                }
+            }
+
+            // 衛星の更新
+            for (let i = state.satellites.length - 1; i >= 0; i--) {
+                const s = state.satellites[i];
+                s.life -= dt;
+                if (s.life <= 0 || (s.owner && s.owner.hp <= 0)) {
+                    state.satellites.splice(i, 1);
+                    continue;
+                }
+                s.angle += 3.4 * dt;
+                s.x = s.owner.x + Math.cos(s.angle) * s.orbitRadius;
+                s.y = s.owner.y + Math.sin(s.angle) * s.orbitRadius;
+
+                // 合体：アストラル・ビット（衛星＋弓）自動射撃
+                if (s.canShootBow) {
+                    s.shootTimer -= dt;
+                    if (s.shootTimer <= 0) {
+                        s.shootTimer = 0.75;
+                        const aimAng = s.isPlayer
+                            ? Math.atan2((p.y + (mouse.y - height / 2)) - s.y, (p.x + (mouse.x - width / 2)) - s.x)
+                            : Math.atan2(p.y - s.y, p.x - s.x);
+                        if (state.projectiles.length < MAX_PROJECTILES) {
+                            state.projectiles.push({
+                                x: s.x, y: s.y,
+                                vx: Math.cos(aimAng) * 520,
+                                vy: Math.sin(aimAng) * 520,
+                                isPlayer: s.isPlayer,
+                                radius: 4.5,
+                                damage: s.damage * 0.75,
+                                life: 1.1,
+                                spawnHoleOnHit: false,
+                                pierceCount: (s.elements.holy || 0) * 2,
+                                bouncesLeft: (s.modifiers.bounce || 0) * 2,
+                                hitIds: new Set(),
+                                elements: s.elements,
+                                modifiers: s.modifiers,
+                                color: s.color,
+                                secondary: s.secondary,
+                                isCombo: true,
+                                trail: []
+                            });
+                        }
+                    }
+                }
+
+                // 接触ダメージ判定
+                if (s.isPlayer) {
+                    for (let j = 0; j < state.enemies.length; j++) {
+                        const en = state.enemies[j];
+                        if (en.hp > 0 && Math.hypot(en.x - s.x, en.y - s.y) <= en.radius + s.radius) {
+                            damageEnemy(en, s.damage * dt * 5, s.elements, s.modifiers, true);
+                        }
+                    }
+                } else if (Math.hypot(p.x - s.x, p.y - s.y) <= p.radius + s.radius) {
+                    damagePlayer(s.damage * dt * 4);
+                }
+            }
+
+            // タレットの更新
+            for (let i = state.turrets.length - 1; i >= 0; i--) {
+                const t = state.turrets[i];
+                t.life -= dt;
+                t.rot += 2.2 * dt;
+                if (t.life <= 0) {
+                    state.turrets.splice(i, 1);
+                    continue;
+                }
+
+                // 合体：グラビティ・タレット（重力吸引）
+                if (t.hasGravityHole && t.isPlayer) {
+                    const pullRange = 165;
+                    for (let j = 0; j < state.enemies.length; j++) {
+                        const en = state.enemies[j];
+                        if (en.hp <= 0) continue;
+                        const dx = t.x - en.x;
+                        const dy = t.y - en.y;
+                        const d = Math.hypot(dx, dy);
+                        if (d > 8 && d < pullRange) {
+                            en.x += (dx / d) * 130 * dt;
+                            en.y += (dy / d) * 130 * dt;
+                        }
+                    }
+                }
+
+                t.fireTimer -= dt;
+                if (t.fireTimer <= 0) {
+                    t.fireTimer = t.hasGravityHole ? 0.32 : 0.45;
+                    let target = null;
+                    let minDist = 420;
+                    if (t.isPlayer) {
+                        for (let j = 0; j < state.enemies.length; j++) {
+                            const en = state.enemies[j];
+                            if (en.hp <= 0) continue;
+                            const d = Math.hypot(en.x - t.x, en.y - t.y);
+                            if (d < minDist) {
+                                minDist = d;
+                                target = en;
+                            }
+                        }
+                    } else {
+                        target = p;
+                    }
+
+                    if (target && state.projectiles.length < MAX_PROJECTILES) {
+                        const ang = Math.atan2(target.y - t.y, target.x - t.x);
+                        if (t.hasBeam && state.beams.length < 12) {
+                            state.beams.push({
+                                owner: t,
+                                isPlayer: t.isPlayer,
+                                angleOffset: 0,
+                                aimAngle: ang,
+                                length: 300,
+                                width: 12,
+                                damage: t.damage * 0.85,
+                                life: 0.4,
+                                maxLife: 0.4,
+                                tickTimer: 0.12,
+                                spawnHoleAtTip: t.hasGravityHole,
+                                bounceCount: t.modifiers.bounce || 0,
+                                elements: t.elements,
+                                modifiers: t.modifiers,
+                                color: t.color,
+                                secondary: t.secondary,
+                                isCombo: true
+                            });
+                        } else {
+                            state.projectiles.push({
+                                x: t.x, y: t.y,
+                                vx: Math.cos(ang) * 520,
+                                vy: Math.sin(ang) * 520,
+                                isPlayer: t.isPlayer,
+                                radius: 5,
+                                damage: t.damage,
+                                life: 1.2,
+                                spawnHoleOnHit: false,
+                                pierceCount: (t.elements.holy || 0) * 2,
+                                bouncesLeft: (t.modifiers.bounce || 0) * 2,
+                                hitIds: new Set(),
+                                elements: t.elements,
+                                modifiers: t.modifiers,
+                                color: t.color,
+                                secondary: t.secondary,
+                                isCombo: t.isCombo,
+                                trail: []
+                            });
+                        }
+                    }
+                }
+            }
+
+            // ブラックホール（重力場）の更新
+            for (let i = state.blackHoles.length - 1; i >= 0; i--) {
+                const bh = state.blackHoles[i];
+                bh.life -= dt;
+                bh.rot += 3.5 * dt;
+                if (bh.life <= 0) {
+                    state.blackHoles.splice(i, 1);
+                    continue;
+                }
+
+                bh.tickTimer -= dt;
+                const doTick = bh.tickTimer <= 0;
+                if (doTick) bh.tickTimer = 0.25;
+
+                if (bh.isPlayer) {
+                    for (let j = 0; j < state.enemies.length; j++) {
+                        const en = state.enemies[j];
+                        if (en.hp <= 0) continue;
+                        const dx = bh.x - en.x;
+                        const dy = bh.y - en.y;
+                        const d = Math.hypot(dx, dy);
+                        if (d < bh.radius * 1.4 && d > 6) {
+                            en.x += (dx / d) * 145 * dt;
+                            en.y += (dy / d) * 145 * dt;
+                        }
+                        if (doTick && d <= bh.radius) {
+                            damageEnemy(en, bh.damage, {}, {}, true);
+                        }
+                    }
+                } else {
+                    const dx = bh.x - p.x;
+                    const dy = bh.y - p.y;
+                    const d = Math.hypot(dx, dy);
+                    if (d < bh.radius * 1.3 && d > 8) {
+                        p.x += (dx / d) * 110 * dt;
+                        p.y += (dy / d) * 110 * dt;
+                    }
+                    if (doTick && d <= bh.radius * 0.75) {
+                        damagePlayer(bh.damage * 0.5);
+                    }
+                }
+            }
+
+            // 弾丸（プロジェクタイル）の更新＆バウンス・光貫通・画面外クリーンアップ
+            const cullDist = Math.max(width, height) * 0.9 + 300;
+            const halfW = width * 0.48;
+            const halfH = height * 0.48;
+
+            for (let i = state.projectiles.length - 1; i >= 0; i--) {
+                const pr = state.projectiles[i];
+                pr.life -= dt;
+                pr.x += pr.vx * dt;
+                pr.y += pr.vy * dt;
+
+                // バウンスパッチによる画面境界反射
+                if (pr.bouncesLeft > 0) {
+                    let bounced = false;
+                    if (pr.x < p.x - halfW && pr.vx < 0) { pr.vx *= -1; bounced = true; }
+                    else if (pr.x > p.x + halfW && pr.vx > 0) { pr.vx *= -1; bounced = true; }
+                    if (pr.y < p.y - halfH && pr.vy < 0) { pr.vy *= -1; bounced = true; }
+                    else if (pr.y > p.y + halfH && pr.vy > 0) { pr.vy *= -1; bounced = true; }
+
+                    if (bounced) {
+                        pr.bouncesLeft--;
+                        if (pr.hitIds) pr.hitIds.clear();
+                        spawnParticles(pr.x, pr.y, 6, pr.color, '#ffffff', 40, 120, 0.25, 2.2);
+                    }
+                }
+
+                // 画面外や寿命切れを即座に破棄
+                if (pr.life <= 0 || Math.hypot(pr.x - p.x, pr.y - p.y) > cullDist) {
+                    state.projectiles.splice(i, 1);
+                    continue;
+                }
+
+                pr.trail.push({ x: pr.x, y: pr.y });
+                if (pr.trail.length > 6) pr.trail.shift();
+
+                let hit = false;
+                let hitEnemy = null;
+                if (pr.isPlayer) {
+                    for (let j = 0; j < state.enemies.length; j++) {
+                        const en = state.enemies[j];
+                        if (en.hp > 0 && (!pr.hitIds || !pr.hitIds.has(en)) && Math.hypot(en.x - pr.x, en.y - pr.y) <= en.radius + pr.radius) {
+                            damageEnemy(en, pr.damage, pr.elements, pr.modifiers, true);
+                            if (pr.hitIds) pr.hitIds.add(en);
+                            hit = true;
+                            hitEnemy = en;
+                            break;
+                        }
+                    }
+                } else {
+                    if (Math.hypot(p.x - pr.x, p.y - pr.y) <= p.radius + pr.radius) {
+                        damagePlayer(pr.damage);
+                        hit = true;
+                    }
+                }
+
+                if (hit) {
+                    sfx.playHit();
+                    spawnParticles(pr.x, pr.y, 12, pr.color, pr.secondary, 50, 190, 0.38, 3.0);
+                    spawnMagicCircle(pr.x, pr.y, pr.isCombo ? 34 : 22, pr.color, pr.secondary, 0.24, false);
+                    // 合体：特異点アロー（弓＋穴）
+                    if (pr.spawnHoleOnHit && state.blackHoles.length < 10) {
+                        state.blackHoles.push({
+                            x: pr.x, y: pr.y,
+                            isPlayer: pr.isPlayer,
+                            radius: 58,
+                            damage: pr.damage * 0.35,
+                            life: 2.4,
+                            tickTimer: 0.25,
+                            color: '#a855f7',
+                            secondary: '#f472b6',
+                            isCombo: true,
+                            rot: 0
+                        });
+                    }
+
+                    // 1) 光属性の貫通処理
+                    if (pr.pierceCount > 0) {
+                        pr.pierceCount--;
+                        continue;
+                    }
+                    // 2) バウンスパッチの敵反射処理（別の近くの敵へ跳弾）
+                    if (pr.bouncesLeft > 0 && hitEnemy) {
+                        pr.bouncesLeft--;
+                        let nextTarget = null;
+                        let bestDist = 340;
+                        for (let j = 0; j < state.enemies.length; j++) {
+                            const cand = state.enemies[j];
+                            if (cand.hp > 0 && (!pr.hitIds || !pr.hitIds.has(cand))) {
+                                const d = Math.hypot(cand.x - pr.x, cand.y - pr.y);
+                                if (d < bestDist) {
+                                    bestDist = d;
+                                    nextTarget = cand;
+                                }
+                            }
+                        }
+                        const spd = Math.hypot(pr.vx, pr.vy);
+                        if (nextTarget) {
+                            const ang = Math.atan2(nextTarget.y - pr.y, nextTarget.x - pr.x);
+                            pr.vx = Math.cos(ang) * spd;
+                            pr.vy = Math.sin(ang) * spd;
+                        } else {
+                            pr.vx = -pr.vx + (Math.random() - 0.5) * 120;
+                            pr.vy = -pr.vy + (Math.random() - 0.5) * 120;
+                        }
+                        continue;
+                    }
+
+                    state.projectiles.splice(i, 1);
+                }
+            }
+
+            // エネミーAI更新＆毒スリップ＆死亡クリーンアップ
+            for (let i = state.enemies.length - 1; i >= 0; i--) {
+                const en = state.enemies[i];
+                if (en.poisonTimer > 0) {
+                    en.poisonTimer -= dt;
+                    en.hp -= en.poisonDps * dt;
+                    if (Math.random() < 0.15) {
+                        spawnParticles(en.x, en.y, 1, '#10b981', '#a3e635', 10, 40, 0.35, 2.2);
+                    }
+                }
+                if (en.hp <= 0) {
+                    onEnemyKilled(en);
+                    state.enemies.splice(i, 1);
+                    continue;
+                }
+
+                if (en.slowTimer > 0) en.slowTimer = Math.max(0, en.slowTimer - dt);
+                if (en.flashTimer > 0) en.flashTimer = Math.max(0, en.flashTimer - dt);
+                en.rot += 2.0 * dt;
+
+                const speedMult = en.slowTimer > 0 ? 0.45 : 1.0;
+                const dx = p.x - en.x;
+                const dy = p.y - en.y;
+                const dist = Math.hypot(dx, dy);
+                const angleToPlayer = Math.atan2(dy, dx);
+
+                if (en.type === 'charger') {
+                    // 突撃型：直線的に高速突撃＋残像トレイル
+                    en.trail.push({ x: en.x, y: en.y });
+                    if (en.trail.length > 6) en.trail.shift();
+                    en.x += Math.cos(angleToPlayer) * en.speed * speedMult * dt;
+                    en.y += Math.sin(angleToPlayer) * en.speed * speedMult * dt;
+
+                    if (dist <= p.radius + en.radius) {
+                        damagePlayer(en.damage);
+                        en.x -= Math.cos(angleToPlayer) * 45;
+                        en.y -= Math.sin(angleToPlayer) * 45;
+                    }
+                } else if (en.type === 'volatile') {
+                    // 自爆型：接近でカウントダウン＆大爆発
+                    const moveFactor = en.isFusing ? 0.35 : 1.0;
+                    en.x += Math.cos(angleToPlayer) * en.speed * speedMult * moveFactor * dt;
+                    en.y += Math.sin(angleToPlayer) * en.speed * speedMult * moveFactor * dt;
+
+                    if (dist < 115 || en.isFusing) {
+                        en.isFusing = true;
+                        en.fuseTimer += dt;
+                        if (en.fuseTimer >= 1.15) {
+                            sfx.playExplosion();
+                            triggerShake(13, 0.25);
+                            spawnMagicCircle(en.x, en.y, 92, '#f43f5e', '#ffd166', 0.42, true);
+                            spawnParticles(en.x, en.y, 18, '#f43f5e', '#ffd166', 70, 240, 0.45, 3.5);
+                            if (dist <= 92) {
+                                damagePlayer(en.damage);
+                            }
+                            state.enemies.splice(i, 1);
+                            continue;
+                        }
+                    }
+                } else {
+                    // 魔法使い型（CPUライバル）：適正距離を保ちつつストレイフ周回＆カスタム魔法詠唱
+                    en.strafeTimer -= dt;
+                    if (en.strafeTimer <= 0) {
+                        en.strafeDir *= -1;
+                        en.strafeTimer = 1.6 + Math.random() * 2.0;
+                    }
+
+                    let radialSpeed = 0;
+                    if (dist > 260) radialSpeed = 1;
+                    else if (dist < 160) radialSpeed = -0.85;
+
+                    const tangentAngle = angleToPlayer + (Math.PI / 2) * en.strafeDir;
+                    const vx = (Math.cos(angleToPlayer) * radialSpeed + Math.cos(tangentAngle) * 0.85) * en.speed * speedMult;
+                    const vy = (Math.sin(angleToPlayer) * radialSpeed + Math.sin(tangentAngle) * 0.85) * en.speed * speedMult;
+                    en.x += vx * dt;
+                    en.y += vy * dt;
+
+                    en.castCooldown -= dt * speedMult;
+                    if (en.castCooldown <= 0) {
+                        en.castCooldown = Math.max(1.2, 2.5 - state.wave * 0.12);
+                        const rivalSlots = en.equippedPatches.map(id => ({ typeId: id }));
+                        castCustomSpell(en, rivalSlots, p.x, p.y, false);
+                    }
+                }
+            }
+
+            // ドロップアイテム更新＆回収
+            for (let i = state.drops.length - 1; i >= 0; i--) {
+                const d = state.drops[i];
+                d.life -= dt;
+                d.bobPhase += 4.5 * dt;
+                d.vx *= 0.92;
+                d.vy *= 0.92;
+                d.x += d.vx * dt;
+                d.y += d.vy * dt;
+
+                if (d.life <= 0) {
+                    state.drops.splice(i, 1);
+                    continue;
+                }
+
+                // プレイヤーへの磁力吸引
+                const dist = Math.hypot(p.x - d.x, p.y - d.y);
+                if (dist < 120 && dist > 1) {
+                    d.x += ((p.x - d.x) / dist) * 260 * dt;
+                    d.y += ((p.y - d.y) / dist) * 260 * dt;
+                }
+
+                if (dist <= p.radius + 18) {
+                    if (d.kind === 'heal') {
+                        p.hp = Math.min(p.maxHp, p.hp + 30);
+                        sfx.playHeal();
+                        showToast('HP回復オーブ取得！ LIFE +30', '#f43f5e');
+                        spawnParticles(d.x, d.y, 8, '#f43f5e', '#ffffff', 40, 120, 0.3, 2.5);
+                    } else if (d.kind === 'mana_buff') {
+                        p.manaUpgradeLevel += 1;
+                        p.manaRegen += 3.5;
+                        p.manaRegenBuffTimer = 6.0;
+                        sfx.playPickup();
+                        showToast(`MP再生速度永続UP (Lv.${p.manaUpgradeLevel}) ＋ 6秒間急速チャージ！`, '#00f3ff');
+                        spawnMagicCircle(p.x, p.y, 44, '#00f3ff', '#fbbf24', 0.4, true);
+                    } else if (d.kind === 'patch') {
+                        state.inventory.push({ typeId: d.typeId });
+                        const def = PATCH_DEFS[d.typeId];
+                        sfx.playPickup();
+                        showToast(`新規パッチ獲得：【${def.icon} ${def.name}】`, def.color);
+                        spawnMagicCircle(p.x, p.y, 40, def.color, '#ffd700', 0.35, false);
+                    }
+                    state.drops.splice(i, 1);
+                }
+            }
+
+            // エフェクト配列クリーンアップ
+            for (let i = state.particles.length - 1; i >= 0; i--) {
+                const pt = state.particles[i];
+                pt.life -= dt;
+                if (pt.life <= 0) {
+                    state.particles.splice(i, 1);
+                    continue;
+                }
+                pt.x += pt.vx * dt;
+                pt.y += pt.vy * dt;
+                pt.vx *= 0.94;
+                pt.vy *= 0.94;
+            }
+
+            for (let i = state.magicCircles.length - 1; i >= 0; i--) {
+                const mc = state.magicCircles[i];
+                mc.life -= dt;
+                if (mc.life <= 0) {
+                    state.magicCircles.splice(i, 1);
+                    continue;
+                }
+                mc.rot += 2.5 * dt;
+                const progress = 1 - mc.life / mc.maxLife;
+                mc.radius = mc.maxRadius * (0.25 + 0.75 * (1 - Math.pow(1 - progress, 3)));
+            }
+
+            for (let i = state.damageNumbers.length - 1; i >= 0; i--) {
+                const dn = state.damageNumbers[i];
+                dn.life -= dt;
+                if (dn.life <= 0) {
+                    state.damageNumbers.splice(i, 1);
+                    continue;
+                }
+                dn.y += dn.vy * dt;
+            }
+
+            if (state.shakeTimer > 0) {
+                state.shakeTimer = Math.max(0, state.shakeTimer - dt);
+                if (state.shakeTimer === 0) state.shakeIntensity = 0;
+            }
+            if (state.flashAlpha > 0) {
+                state.flashAlpha = Math.max(0, state.flashAlpha - dt * 0.9);
+            }
+
+            // ウェーブ全滅判定＆次ウェーブ移行
+            if (state.enemies.length === 0) {
+                if (state.waveTransitionTimer <= 0) {
+                    state.waveTransitionTimer = 2.2;
+                    const rewardKey = ALL_PATCH_KEYS[Math.floor(Math.random() * ALL_PATCH_KEYS.length)];
+                    state.inventory.push({ typeId: rewardKey });
+                    state.skillPoints += 2;
+                    const def = PATCH_DEFS[rewardKey];
+                    sfx.playPickup();
+
+                    const banner = document.getElementById('waveClearBanner');
+                    document.getElementById('waveRewardText').textContent = `報酬パッチ【${def.icon} ${def.name}】＆ スキルポイント +2 SP 獲得！`;
+                    banner.classList.remove('hidden');
+                } else {
+                    state.waveTransitionTimer -= dt;
+                    if (state.waveTransitionTimer <= 0) {
+                        document.getElementById('waveClearBanner').classList.add('hidden');
+                        state.wave++;
+                        document.getElementById('waveDisplay').textContent = state.wave;
+                        spawnWave(state.wave);
+                    }
+                }
+            }
+
+            updateHUD();
+        }
+
+        function distToSegment(px, py, x1, y1, x2, y2) {
+            const l2 = (x2 - x1) ** 2 + (y2 - y1) ** 2;
+            if (l2 === 0) return Math.hypot(px - x1, py - y1);
+            let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
+        }
+
+        function damagePlayer(amount) {
+            const p = state.player;
+            if (p.shieldTimer > 0 || p.invuln > 0) return;
+
+            p.hp = Math.max(0, p.hp - amount);
+            p.invuln = 0.55;
+            sfx.playHit();
+            triggerShake(9, 0.2);
+            triggerScreenFlash('#f43f5e', 0.32);
+            spawnDamageNumber(p.x, p.y, amount, '#f43f5e', true);
+
+            if (p.hp <= 0) {
+                triggerGameOver();
+            }
+        }
+
+        function triggerGameOver() {
+            state.mode = 'gameover';
+            document.getElementById('hudLayer').classList.add('hidden');
+            document.getElementById('craftModal').classList.add('hidden');
+            document.getElementById('skillModal').classList.add('hidden');
+            document.getElementById('waveClearBanner').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+
+            document.getElementById('finalWaveText').textContent = `WAVE ${state.wave}`;
+            document.getElementById('finalKillsText').textContent = `${state.kills} 体`;
+            document.getElementById('finalScoreText').textContent = state.score.toLocaleString();
+            document.getElementById('gameOverSpText').textContent = state.skillPoints;
+        }
+
+        // ==========================================
+        // 9. 描画エンジン（事前生成グロウテクスチャ＋多層ブルーム演出）
+        // ==========================================
+        function render() {
+            // 背景ベース塗りつぶし
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = '#05050a';
+            ctx.fillRect(0, 0, width, height);
+
+            const p = state.player;
+            let shakeX = 0, shakeY = 0;
+            if (state.shakeTimer > 0) {
+                shakeX = (Math.random() - 0.5) * state.shakeIntensity * 2;
+                shakeY = (Math.random() - 0.5) * state.shakeIntensity * 2;
+            }
+
+            // 1) パララックス背景グリッド＆幾何学模様
+            renderBackground(p.x, p.y);
+
+            ctx.save();
+            ctx.translate(width / 2 - p.x + shakeX, height / 2 - p.y + shakeY);
+
+            // 2) 加算ブレンド（lighter）による超リッチ発光エフェクト一括描画
+            ctx.globalCompositeOperation = 'lighter';
+
+            // 魔法陣描画（多重幾何学＆ルーンリング）
+            for (let i = 0; i < state.magicCircles.length; i++) {
+                const mc = state.magicCircles[i];
+                const alpha = Math.max(0, mc.life / mc.maxLife);
+                ctx.save();
+                ctx.translate(mc.x, mc.y);
+                ctx.rotate(mc.rot);
+
+                // 外周グロウ
+                ctx.strokeStyle = mc.color;
+                ctx.globalAlpha = alpha * 0.35;
+                ctx.lineWidth = 6;
+                ctx.beginPath();
+                ctx.arc(0, 0, mc.radius, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // シャープなネオン主線
+                ctx.globalAlpha = alpha * 0.95;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(0, 0, mc.radius, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // 六芒星（正三角＋逆三角）
+                const r = mc.radius * 0.85;
+                for (let tri = 0; tri < 2; tri++) {
+                    ctx.beginPath();
+                    for (let k = 0; k < 3; k++) {
+                        const a = (Math.PI * 2 / 3) * k + (tri * Math.PI / 3);
+                        const x = Math.cos(a) * r, y = Math.sin(a) * r;
+                        if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+                }
+
+                if (mc.isDouble) {
+                    ctx.rotate(-mc.rot * 2.2);
+                    ctx.strokeStyle = mc.secondary;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, mc.radius * 0.62, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.strokeRect(-mc.radius * 0.44, -mc.radius * 0.44, mc.radius * 0.88, mc.radius * 0.88);
+                }
+                ctx.restore();
+            }
+
+            // ブラックホール描画（渦巻き降着円盤＆事象の地平線）
+            for (let i = 0; i < state.blackHoles.length; i++) {
+                const bh = state.blackHoles[i];
+                const bhGlow = getGlowSprite(bh.color);
+                ctx.globalAlpha = 0.65;
+                ctx.drawImage(bhGlow, bh.x - bh.radius * 1.3, bh.y - bh.radius * 1.3, bh.radius * 2.6, bh.radius * 2.6);
+
+                ctx.save();
+                ctx.translate(bh.x, bh.y);
+                ctx.rotate(bh.rot);
+                ctx.globalAlpha = 0.9;
+                ctx.strokeStyle = bh.color;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(0, 0, bh.radius * 0.82, 0, Math.PI * 1.5);
+                ctx.stroke();
+
+                ctx.rotate(-bh.rot * 1.8);
+                ctx.strokeStyle = bh.secondary;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(0, 0, bh.radius * 0.52, Math.PI * 0.3, Math.PI * 1.8);
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            // 弾丸＆トレイル描画（グロウテクスチャ＋滑らか先細りトレイル＋白熱コア）
+            const nowMs = performance.now();
+
+            // レーザービーム描画
+            for (let i = 0; i < state.beams.length; i++) {
+                const b = state.beams[i];
+                const alpha = Math.min(1, (b.life / b.maxLife) * 2.2);
+                const pulseW = b.width * (0.85 + 0.2 * Math.sin(nowMs * 0.04));
+
+                // 外周ネオングロウ
+                ctx.strokeStyle = b.color;
+                ctx.lineWidth = pulseW * 2.2;
+                ctx.globalAlpha = alpha * 0.35;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(b.startX, b.startY);
+                ctx.lineTo(b.endX, b.endY);
+                ctx.stroke();
+
+                // 中間属性カラー
+                ctx.strokeStyle = b.secondary;
+                ctx.lineWidth = pulseW * 1.1;
+                ctx.globalAlpha = alpha * 0.75;
+                ctx.beginPath();
+                ctx.moveTo(b.startX, b.startY);
+                ctx.lineTo(b.endX, b.endY);
+                ctx.stroke();
+
+                // 中心白熱コア
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = pulseW * 0.42;
+                ctx.globalAlpha = alpha;
+                ctx.beginPath();
+                ctx.moveTo(b.startX, b.startY);
+                ctx.lineTo(b.endX, b.endY);
+                ctx.stroke();
+
+                // 照射口＆先端のスパークグロウ
+                const tipGlow = getGlowSprite(b.color);
+                ctx.globalAlpha = alpha * 0.85;
+                ctx.drawImage(tipGlow, b.startX - 24, b.startY - 24, 48, 48);
+                ctx.drawImage(tipGlow, b.endX - 28, b.endY - 28, 56, 56);
+            }
+            ctx.lineCap = 'butt';
+            for (let i = 0; i < state.projectiles.length; i++) {
+                const pr = state.projectiles[i];
+                const col = pr.isCombo ? `hsl(${(nowMs * 0.4 + i * 30) % 360}, 95%, 62%)` : pr.color;
+
+                // 滑らかな多層トレイル
+                if (pr.trail.length > 1) {
+                    for (let t = 1; t < pr.trail.length; t++) {
+                        const ratio = t / pr.trail.length;
+                        ctx.strokeStyle = col;
+                        ctx.lineWidth = pr.radius * 2.2 * ratio;
+                        ctx.globalAlpha = ratio * 0.55;
+                        ctx.beginPath();
+                        ctx.moveTo(pr.trail[t - 1].x, pr.trail[t - 1].y);
+                        ctx.lineTo(pr.trail[t].x, pr.trail[t].y);
+                        ctx.stroke();
+                    }
+                }
+
+                // 高速グロウテクスチャ描画（shadowBlurと同等以上の美しいブルーム）
+                const sprite = getGlowSprite(pr.color);
+                const glowSize = pr.radius * 6.5;
+                ctx.globalAlpha = 0.9;
+                ctx.drawImage(sprite, pr.x - glowSize / 2, pr.y - glowSize / 2, glowSize, glowSize);
+
+                // 中心の白熱コア
+                ctx.globalAlpha = 1.0;
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(pr.x, pr.y, pr.radius * 0.95, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 衛星＆タレット描画
+            for (let i = 0; i < state.satellites.length; i++) {
+                const s = state.satellites[i];
+                const sprite = getGlowSprite(s.color);
+                const glowSize = s.radius * 6.0;
+                ctx.globalAlpha = 0.85;
+                ctx.drawImage(sprite, s.x - glowSize / 2, s.y - glowSize / 2, glowSize, glowSize);
+
+                ctx.globalAlpha = 1.0;
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.radius * 0.85, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            for (let i = 0; i < state.turrets.length; i++) {
+                const t = state.turrets[i];
+                const sprite = getGlowSprite(t.color);
+                ctx.globalAlpha = 0.6;
+                ctx.drawImage(sprite, t.x - 42, t.y - 42, 84, 84);
+
+                ctx.save();
+                ctx.translate(t.x, t.y);
+                ctx.globalAlpha = 0.95;
+                if (t.hasGravityHole) {
+                    ctx.strokeStyle = 'rgba(168, 85, 247, 0.55)';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 140, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                ctx.rotate(t.rot);
+                ctx.strokeStyle = t.color;
+                ctx.lineWidth = 2.5;
+                ctx.strokeRect(-t.radius, -t.radius, t.radius * 2, t.radius * 2);
+                ctx.rotate(Math.PI / 4);
+                ctx.strokeStyle = t.secondary;
+                ctx.strokeRect(-t.radius * 0.75, -t.radius * 0.75, t.radius * 1.5, t.radius * 1.5);
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(0, 0, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // 火花パーティクル一括描画（外周グロウ＋白熱芯）
+            for (let i = 0; i < state.particles.length; i++) {
+                const pt = state.particles[i];
+                const alpha = Math.max(0, pt.life / pt.maxLife);
+                ctx.globalAlpha = alpha * 0.45;
+                ctx.fillStyle = pt.color;
+                ctx.beginPath();
+                ctx.arc(pt.x, pt.y, pt.size * 2.1, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(pt.x, pt.y, pt.size * 0.75, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1.0;
+
+            // 3) 通常ブレンドに戻してドロップ・エネミー・プレイヤー描画
+            ctx.globalCompositeOperation = 'source-over';
+
+            // ドロップアイテム描画
+            ctx.font = 'bold 11px "Noto Sans JP", sans-serif';
+            ctx.textAlign = 'center';
+            for (let i = 0; i < state.drops.length; i++) {
+                const d = state.drops[i];
+                const bobY = d.y + Math.sin(d.bobPhase) * 4;
+                if (d.kind === 'heal') {
+                    ctx.fillStyle = 'rgba(244, 63, 94, 0.25)';
+                    ctx.beginPath();
+                    ctx.arc(d.x, bobY, 16, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#f43f5e';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillText('+HP', d.x, bobY + 4);
+                } else if (d.kind === 'mana_buff') {
+                    ctx.fillStyle = 'rgba(0, 243, 255, 0.25)';
+                    ctx.beginPath();
+                    ctx.arc(d.x, bobY, 16, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#00f3ff';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    ctx.fillStyle = '#fbbf24';
+                    ctx.fillText('MP↑', d.x, bobY + 4);
+                } else if (d.kind === 'patch') {
+                    const def = PATCH_DEFS[d.typeId];
+                    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+                    ctx.beginPath();
+                    ctx.arc(d.x, bobY, 17, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = def.color;
+                    ctx.lineWidth = 2.2;
+                    ctx.stroke();
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillText(def.icon, d.x, bobY + 4);
+                }
+            }
+
+            // エネミー描画
+            for (let i = 0; i < state.enemies.length; i++) {
+                const en = state.enemies[i];
+                ctx.save();
+                ctx.translate(en.x, en.y);
+
+                if (en.type === 'charger') {
+                    // 突撃型（残像＋幾何学フレーム）
+                    if (en.trail.length > 1) {
+                        ctx.save();
+                        ctx.translate(-en.x, -en.y);
+                        for (let t = 1; t < en.trail.length; t++) {
+                            const r = t / en.trail.length;
+                            ctx.strokeStyle = `rgba(56, 189, 248, ${r * 0.3})`;
+                            ctx.lineWidth = 1.5;
+                            ctx.strokeRect(en.trail[t].x - en.radius * 0.7, en.trail[t].y - en.radius * 0.7, en.radius * 1.4, en.radius * 1.4);
+                        }
+                        ctx.restore();
+                    }
+                    ctx.rotate(en.rot);
+                    ctx.strokeStyle = en.flashTimer > 0 ? '#ffffff' : en.color;
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(-en.radius, -en.radius, en.radius * 2, en.radius * 2);
+                    ctx.beginPath();
+                    ctx.moveTo(en.radius + 5, 0);
+                    ctx.lineTo(-en.radius, -en.radius);
+                    ctx.lineTo(-en.radius, en.radius);
+                    ctx.closePath();
+                    ctx.stroke();
+                    ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+                    ctx.fill();
+                } else if (en.type === 'volatile') {
+                    // 自爆型（警告サークル＆点滅リング）
+                    if (en.isFusing) {
+                        const blink = Math.floor(nowMs * 0.03) % 2 === 0;
+                        ctx.strokeStyle = blink ? '#ffffff' : '#f43f5e';
+                        ctx.lineWidth = 2;
+                        ctx.setLineDash([6, 4]);
+                        ctx.beginPath();
+                        ctx.arc(0, 0, 92, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                    }
+                    ctx.rotate(-en.rot * 1.5);
+                    const flashWhite = en.flashTimer > 0 || (en.isFusing && Math.floor(nowMs * 0.025) % 2 === 0);
+                    ctx.strokeStyle = flashWhite ? '#ffffff' : en.color;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, en.radius, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.fillStyle = flashWhite ? '#f43f5e' : '#ffd166';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, en.radius * 0.45, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    // 魔法使い型（CPUライバル）
+                    ctx.save();
+                    ctx.rotate(en.rot);
+                    ctx.strokeStyle = en.flashTimer > 0 ? '#ffffff' : en.color;
+                    ctx.lineWidth = 2.5;
+                    ctx.beginPath();
+                    for (let k = 0; k < 6; k++) {
+                        const a = (Math.PI / 3) * k;
+                        const rx = Math.cos(a) * en.radius;
+                        const ry = Math.sin(a) * en.radius;
+                        if (k === 0) ctx.moveTo(rx, ry); else ctx.lineTo(rx, ry);
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+                    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+                    ctx.fill();
+                    ctx.restore();
+
+                    // ライバル称号バッジ
+                    ctx.fillStyle = en.color;
+                    ctx.font = 'bold 10px "Noto Sans JP", sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(en.title, 0, -en.radius - 10);
+                }
+
+                // 凍結スロウ・猛毒ステータス表示
+                if (en.slowTimer > 0) {
+                    ctx.strokeStyle = '#00f3ff';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, en.radius + 5, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                if (en.poisonTimer > 0) {
+                    ctx.strokeStyle = '#10b981';
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([3, 3]);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, en.radius + 8, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                // HPミニバー
+                const hpRatio = Math.max(0, en.hp / en.maxHp);
+                if (hpRatio < 1) {
+                    const barW = en.radius * 2.2;
+                    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+                    ctx.fillRect(-barW / 2, en.radius + 7, barW, 4);
+                    ctx.fillStyle = en.type === 'rival' ? en.color : '#f43f5e';
+                    ctx.fillRect(-barW / 2, en.radius + 7, barW * hpRatio, 4);
+                }
+
+                ctx.restore();
+            }
+
+            // プレイヤー描画（マントトレイル＋回転魔導具＋自機グロウコア）
+            if (p.trail.length > 1) {
+                for (let t = 1; t < p.trail.length; t++) {
+                    const ratio = t / p.trail.length;
+                    ctx.fillStyle = `rgba(0, 243, 255, ${ratio * 0.32})`;
+                    ctx.beginPath();
+                    ctx.arc(p.trail[t].x, p.trail[t].y, p.radius * ratio * 0.95, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            // 自機オーラグロウ（事前生成スプライトで高速描画）
+            const pGlow = getGlowSprite(p.manaRegenBuffTimer > 0 ? '#fbbf24' : '#00f3ff');
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = 0.85;
+            ctx.drawImage(pGlow, p.x - 46, p.y - 46, 92, 92);
+            ctx.globalAlpha = 1.0;
+            ctx.globalCompositeOperation = 'source-over';
+
+            ctx.save();
+            ctx.translate(p.x, p.y);
+
+            // シールド展開中のバリア描画
+            if (p.shieldTimer > 0) {
+                ctx.strokeStyle = '#3b82f6';
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.arc(0, 0, p.radius + 14, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.fillStyle = 'rgba(59, 130, 246, 0.14)';
+                ctx.fill();
+            }
+
+            // MP再生バフ中のオーラリング描画
+            if (p.manaRegenBuffTimer > 0) {
+                ctx.save();
+                ctx.rotate(-nowMs * 0.005);
+                ctx.strokeStyle = '#fbbf24';
+                ctx.lineWidth = 1.8;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.arc(0, 0, p.radius + 19, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            // 回転する魔導具リング
+            ctx.save();
+            ctx.rotate(nowMs * 0.0025);
+            ctx.strokeStyle = 'rgba(0, 243, 255, 0.55)';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(-p.radius * 1.15, -p.radius * 1.15, p.radius * 2.3, p.radius * 2.3);
+            ctx.restore();
+
+            // 照準ポインター
+            ctx.save();
+            ctx.rotate(p.aimAngle);
+            ctx.fillStyle = '#00f3ff';
+            ctx.beginPath();
+            ctx.moveTo(p.radius + 12, 0);
+            ctx.lineTo(p.radius + 4, -5);
+            ctx.lineTo(p.radius + 4, 5);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+
+            // 自機コア（ここだけ限定的にshadowBlurを使用）
+            ctx.shadowColor = '#00f3ff';
+            ctx.shadowBlur = 14;
+            ctx.fillStyle = p.invuln > 0 && Math.floor(nowMs * 0.02) % 2 === 0 ? '#f43f5e' : '#ffffff';
+            ctx.beginPath();
+            ctx.arc(0, 0, p.radius * 0.75, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            ctx.restore();
+
+            // ダメージ数値ポップアップ
+            ctx.textAlign = 'center';
+            for (let i = 0; i < state.damageNumbers.length; i++) {
+                const dn = state.damageNumbers[i];
+                ctx.globalAlpha = Math.max(0, dn.life / dn.maxLife);
+                ctx.font = dn.isCrit ? '900 16px "Noto Sans JP", sans-serif' : '700 13px "Noto Sans JP", sans-serif';
+                ctx.fillStyle = dn.color;
+                ctx.fillText(dn.text, dn.x, dn.y);
+            }
+            ctx.globalAlpha = 1.0;
+
+            ctx.restore();
+
+            // 画面フラッシュオーバーレイ
+            if (state.flashAlpha > 0 && state.flashColor) {
+                ctx.fillStyle = state.flashColor;
+                ctx.globalAlpha = state.flashAlpha;
+                ctx.fillRect(0, 0, width, height);
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        function renderBackground(camX, camY) {
+            const nowSec = performance.now() * 0.001;
+            // 遠景パララックスグリッド
+            const gridSize = 110;
+            const offsetX = (-camX * 0.5) % gridSize;
+            const offsetY = (-camY * 0.5) % gridSize;
+
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.075)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (let x = offsetX; x < width; x += gridSize) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+            }
+            for (let y = offsetY; y < height; y += gridSize) {
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+            }
+            ctx.stroke();
+
+            // 遠景の巨大回転幾何学魔法陣（パララックス0.18）
+            const cx = width / 2 - camX * 0.18;
+            const cy = height / 2 - camY * 0.18;
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(nowSec * 0.06);
+            ctx.strokeStyle = 'rgba(139, 92, 246, 0.12)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(0, 0, 260, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(0, 0, 420, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // 遠景魔法陣の六角幾何学ライン
+            ctx.beginPath();
+            for (let k = 0; k < 6; k++) {
+                const a = (Math.PI / 3) * k;
+                const px = Math.cos(a) * 260;
+                const py = Math.sin(a) * 260;
+                if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.stroke();
+            ctx.restore();
+
+            // 浮遊する光の塵（ダストパーティクル・明滅アニメーション付き）
+            ctx.globalCompositeOperation = 'lighter';
+            for (let i = 0; i < state.dust.length; i++) {
+                const d = state.dust[i];
+                const sx = ((d.x - camX * d.parallax) % width + width) % width;
+                const sy = ((d.y - camY * d.parallax) % height + height) % height;
+                const pulse = 0.65 + 0.35 * Math.sin(nowSec * 2.2 + d.twinkle);
+                ctx.fillStyle = d.color;
+                ctx.globalAlpha = d.alpha * pulse;
+                ctx.beginPath();
+                ctx.arc(sx, sy, d.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1.0;
+            ctx.globalCompositeOperation = 'source-over';
+        }
+
+        // ==========================================
+        // 10. UI＆クラフトモーダル制御
+        // ==========================================
+        function updateHUD() {
+            const p = state.player;
+            document.getElementById('hpText').textContent = `${Math.ceil(p.hp)} / ${p.maxHp}`;
+            document.getElementById('hpBar').style.width = `${Math.max(0, (p.hp / p.maxHp) * 100)}%`;
+
+            document.getElementById('manaText').textContent = `${Math.floor(p.mana)} / ${p.maxMana}`;
+            document.getElementById('manaBar').style.width = `${Math.max(0, (p.mana / p.maxMana) * 100)}%`;
+
+            const badge = document.getElementById('manaBuffBadge');
+            const manaBar = document.getElementById('manaBar');
+            const currentRegen = p.manaRegen * (p.manaRegenBuffTimer > 0 ? 2.5 : 1.0);
+            document.getElementById('manaRegenRateText').textContent = `${currentRegen.toFixed(1)}/s`;
+            document.getElementById('manaUpgradeLevelBadge').textContent = `Lv.${p.manaUpgradeLevel}`;
+
+            if (p.manaRegenBuffTimer > 0) {
+                badge.classList.remove('hidden');
+                manaBar.className = 'h-full bg-gradient-to-r from-cyan-400 via-amber-300 to-yellow-200 transition-all duration-100';
+            } else {
+                badge.classList.add('hidden');
+                manaBar.className = 'h-full bg-gradient-to-r from-indigo-600 via-cyan-500 to-teal-300 transition-all duration-100';
+            }
+
+            const shieldTag = document.getElementById('shieldStatusTag');
+            if (p.shieldTimer > 0) {
+                shieldTag.textContent = `🛡️ 無敵 ${p.shieldTimer.toFixed(1)}s`;
+                shieldTag.classList.remove('hidden');
+            } else {
+                shieldTag.classList.add('hidden');
+            }
+
+            const drainTag = document.getElementById('drainStatusTag');
+            const hasDrain = state.spells.some(slots => slots.some(s => s && s.typeId === 'drain'));
+            if (hasDrain) drainTag.classList.remove('hidden');
+            else drainTag.classList.add('hidden');
+
+            document.getElementById('scoreDisplay').textContent = state.score.toLocaleString();
+            document.getElementById('enemyCountDisplay').textContent = `残存エネミー: ${state.enemies.length}`;
+            document.getElementById('hudSpBadge').textContent = `SP:${state.skillPoints}`;
+        }
+
+        function renderSpellBar() {
+            const container = document.getElementById('spellBarContainer');
+            container.innerHTML = '';
+
+            state.spells.forEach((slots, idx) => {
+                const info = analyzeSpellSlots(slots);
+                const card = document.createElement('button');
+                card.className = 'glass-panel rounded-2xl px-3 py-2 flex flex-col items-start min-w-[108px] sm:min-w-[145px] cursor-pointer hover:border-cyan-400 transition-all';
+                if (info.isCombo) {
+                    card.style.borderColor = '#fbbf24';
+                }
+                card.onclick = () => {
+                    sfx.init();
+                    triggerSpellSlot(idx);
+                };
+
+                const iconsHtml = slots.map(s => {
+                    if (!s) return '<span class="w-5 h-5 rounded bg-slate-900/90 border border-slate-700/70 inline-flex items-center justify-center text-[10px] text-slate-600">・</span>';
+                    const def = PATCH_DEFS[s.typeId];
+                    return `<span class="w-5 h-5 rounded bg-slate-900 border inline-flex items-center justify-center text-xs" style="border-color:${def.color}">${def.icon}</span>`;
+                }).join('');
+
+                card.innerHTML = `
+                    <div class="flex items-center justify-between w-full mb-1">
+                        <span class="px-1.5 py-0.2 rounded bg-cyan-950 border border-cyan-500/50 text-[10px] font-black text-cyan-300">KEY ${idx + 1}</span>
+                        <span class="text-[10px] font-mono text-cyan-200">${info.isEmpty ? '-' : 'MP ' + info.manaCost}</span>
+                    </div>
+                    <div class="text-[11px] font-bold truncate w-full text-left mb-1 ${info.isCombo ? 'text-amber-300' : 'text-slate-200'}">
+                        ${info.isEmpty ? '未設定' : info.synergyName.replace('✨ 合体：', '★')}
+                    </div>
+                    <div class="flex items-center gap-1">${iconsHtml}</div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function toggleCraftModal() {
+            sfx.playClick();
+            const craftModal = document.getElementById('craftModal');
+            const skillModal = document.getElementById('skillModal');
+            if (state.mode === 'playing' || state.mode === 'skill') {
+                skillModal.classList.add('hidden');
+                state.mode = 'craft';
+                state.selectedInventoryIndex = null;
+                document.getElementById('craftModalSpCount').textContent = state.skillPoints;
+                craftModal.classList.remove('hidden');
+                renderCraftUI();
+            } else if (state.mode === 'craft') {
+                state.mode = 'playing';
+                craftModal.classList.add('hidden');
+                renderSpellBar();
+                updateHUD();
+            }
+        }
+
+        function toggleSkillModal(fromGameOver = false) {
+            sfx.playClick();
+            const skillModal = document.getElementById('skillModal');
+            const craftModal = document.getElementById('craftModal');
+            if (state.mode !== 'skill') {
+                state.previousMode = fromGameOver ? 'gameover' : 'playing';
+                craftModal.classList.add('hidden');
+                state.mode = 'skill';
+                skillModal.classList.remove('hidden');
+                renderSkillTreeUI();
+            } else {
+                skillModal.classList.add('hidden');
+                state.mode = state.previousMode === 'gameover' ? 'gameover' : 'playing';
+                if (state.mode === 'gameover') {
+                    document.getElementById('gameOverSpText').textContent = state.skillPoints;
+                } else {
+                    renderSpellBar();
+                    updateHUD();
+                }
+            }
+        }
+
+        function renderSkillTreeUI() {
+            document.getElementById('skillModalSpCount').textContent = state.skillPoints;
+            const grid = document.getElementById('skillTreeGrid');
+            grid.innerHTML = '';
+
+            SKILL_TREE_DEFS.forEach(sk => {
+                const curLv = state.skills[sk.id];
+                const isMax = curLv >= sk.maxLevel;
+                const cost = sk.baseCost + curLv * sk.costStep;
+                const canAfford = !isMax && state.skillPoints >= cost;
+
+                const card = document.createElement('div');
+                card.className = 'bg-slate-950/90 rounded-2xl p-4 border flex flex-col justify-between transition-all';
+                card.style.borderColor = isMax ? '#fbbf24' : canAfford ? sk.color : '#1e293b';
+
+                const pips = Array.from({ length: sk.maxLevel }, (_, idx) =>
+                    `<span class="h-2 flex-1 rounded-full ${idx < curLv ? 'bg-amber-400 shadow-[0_0_8px_#fbbf24]' : 'bg-slate-800'}"></span>`
+                ).join('');
+
+                card.innerHTML = `
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xl">${sk.icon}</span>
+                                <span class="font-bold text-sm text-white">${sk.name}</span>
+                            </div>
+                            <span class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-amber-300">
+                                Lv.${curLv} / ${sk.maxLevel}
+                            </span>
+                        </div>
+                        <div class="flex gap-1.5 mb-2.5">${pips}</div>
+                        <p class="text-xs text-slate-300 leading-relaxed mb-2">${sk.desc}</p>
+                        <div class="text-[11px] font-bold text-cyan-300 mb-3">${sk.effectText(curLv)}</div>
+                    </div>
+                    <button class="unlock-skill-btn w-full py-2.5 rounded-xl text-xs font-black transition-all ${
+                        isMax
+                            ? 'bg-amber-500/20 border border-amber-400/50 text-amber-300 cursor-default'
+                            : canAfford
+                            ? 'neon-btn text-white cursor-pointer'
+                            : 'bg-slate-900 border border-slate-800 text-slate-500 cursor-not-allowed'
+                    }">
+                        ${isMax ? '★ MAX UNLOCKED ★' : `アビリティ解放 (消費: ${cost} SP)`}
+                    </button>
+                `;
+
+                const btn = card.querySelector('.unlock-skill-btn');
+                if (canAfford) {
+                    btn.onclick = () => {
+                        state.skillPoints -= cost;
+                        state.skills[sk.id]++;
+                        applySkillImmediate(sk.id);
+                        sfx.playPickup();
+                        showToast(`🌌 スキル解放：【${sk.name}】Lv.${state.skills[sk.id]}！`, '#fbbf24');
+                        renderSkillTreeUI();
+                    };
+                }
+                grid.appendChild(card);
+            });
+        }
+
+        function applySkillImmediate(skillId) {
+            const p = state.player;
+            if (skillId === 'maxHp') {
+                p.maxHp += 25;
+                p.hp = Math.min(p.maxHp, p.hp + 25);
+            } else if (skillId === 'manaRegen') {
+                p.manaRegen += 4.5;
+                p.manaUpgradeLevel += 1;
+            } else if (skillId === 'slotExpand') {
+                const targetSpells = state.skills.slotExpand >= 1 ? 4 : 3;
+                const targetSlots = state.skills.slotExpand >= 2 ? 5 : 4;
+                while (state.spells.length < targetSpells) {
+                    state.spells.push(Array(targetSlots).fill(null));
+                    state.spellCooldowns.push(0);
+                }
+                state.spells.forEach(arr => {
+                    while (arr.length < targetSlots) arr.push(null);
+                });
+            }
+        }
+
+        function renderCraftUI() {
+            const spellsArea = document.getElementById('craftSpellsArea');
+            spellsArea.innerHTML = '';
+            spellsArea.className = state.spells.length >= 4
+                ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3'
+                : 'grid grid-cols-1 md:grid-cols-3 gap-3.5';
+
+            state.spells.forEach((slots, spellIdx) => {
+                const info = analyzeSpellSlots(slots);
+                const manaWarning = info.manaCost > 65 ? 'text-rose-400 font-black' : info.manaCost > 40 ? 'text-amber-300 font-bold' : 'text-cyan-300 font-bold';
+
+                const box = document.createElement('div');
+                box.className = `bg-slate-950/85 rounded-2xl p-3.5 border ${info.isCombo ? 'border-amber-400/80 shadow-[0_0_15px_rgba(251,191,36,0.2)]' : 'border-slate-800'} flex flex-col justify-between`;
+
+                const colsClass = slots.length >= 5 ? 'grid-cols-5' : 'grid-cols-4';
+                let slotsHtml = `<div class="grid ${colsClass} gap-1.5 my-2.5">`;
+                slots.forEach((s, slotIdx) => {
+                    if (s) {
+                        const def = PATCH_DEFS[s.typeId];
+                        slotsHtml += `
+                            <div data-spell="${spellIdx}" data-slot="${slotIdx}" class="slot-box h-14 rounded-xl bg-slate-900 border-2 flex flex-col items-center justify-center cursor-pointer" style="border-color:${def.color}">
+                                <span class="text-lg leading-none">${def.icon}</span>
+                                <span class="text-[10px] font-bold mt-1" style="color:${def.color}">${def.name}</span>
+                            </div>
+                        `;
+                    } else {
+                        slotsHtml += `
+                            <div data-spell="${spellIdx}" data-slot="${slotIdx}" class="slot-box h-14 rounded-xl bg-slate-900/50 border border-dashed border-slate-700 flex items-center justify-center text-xs text-slate-500 cursor-pointer">
+                                ＋
+                            </div>
+                        `;
+                    }
+                });
+                slotsHtml += '</div>';
+
+                box.innerHTML = `
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-black text-cyan-300">スペル [${spellIdx + 1}]</span>
+                            <div class="flex items-center gap-2 text-[11px]">
+                                <span class="${manaWarning}">消費MP: ${info.manaCost}</span>
+                                <span class="text-rose-300 font-bold">推定威力: ${info.estimatedPower}</span>
+                            </div>
+                        </div>
+                        ${slotsHtml}
+                    </div>
+                    <div class="rounded-xl p-2 text-[11px] ${info.isCombo ? 'bg-amber-500/15 border border-amber-400/40 text-amber-200' : 'bg-slate-900/90 border border-slate-800 text-slate-300'}">
+                        <div class="font-bold mb-0.5">${info.synergyName}</div>
+                        <div class="text-[10px] opacity-90 leading-snug">${info.synergyDesc}</div>
+                    </div>
+                `;
+                spellsArea.appendChild(box);
+            });
+
+            // スロットクリック（配置・入れ替え・解除）イベント
+            spellsArea.querySelectorAll('.slot-box').forEach(el => {
+                el.addEventListener('click', () => {
+                    const spellIdx = Number(el.dataset.spell);
+                    const slotIdx = Number(el.dataset.slot);
+                    const current = state.spells[spellIdx][slotIdx];
+
+                    if (state.selectedInventoryIndex !== null) {
+                        const chosen = state.inventory[state.selectedInventoryIndex];
+                        state.inventory.splice(state.selectedInventoryIndex, 1);
+                        if (current) state.inventory.push(current);
+                        state.spells[spellIdx][slotIdx] = chosen;
+                        state.selectedInventoryIndex = null;
+                        sfx.playPickup();
+                        renderCraftUI();
+                    } else if (current) {
+                        // 選択なしで既存スロットクリック時はインベントリへ戻す
+                        state.inventory.push(current);
+                        state.spells[spellIdx][slotIdx] = null;
+                        sfx.playClick();
+                        renderCraftUI();
+                    }
+                });
+
+                el.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    const spellIdx = Number(el.dataset.spell);
+                    const slotIdx = Number(el.dataset.slot);
+                    const current = state.spells[spellIdx][slotIdx];
+                    if (current) {
+                        state.inventory.push(current);
+                        state.spells[spellIdx][slotIdx] = null;
+                        sfx.playClick();
+                        renderCraftUI();
+                    }
+                });
+            });
+
+            // インベントリ描画
+            const invGrid = document.getElementById('inventoryGrid');
+            const hint = document.getElementById('selectedPatchHint');
+            invGrid.innerHTML = '';
+
+            if (state.selectedInventoryIndex !== null && state.inventory[state.selectedInventoryIndex]) {
+                const def = PATCH_DEFS[state.inventory[state.selectedInventoryIndex].typeId];
+                hint.textContent = `選択中：【${def.icon} ${def.name}】 → 配置したいスロットをクリック`;
+            } else {
+                hint.textContent = state.inventory.length > 0 ? 'パッチを選択してください' : '所持パッチはありません（スロットをクリックで回収）';
+            }
+
+            state.inventory.forEach((item, idx) => {
+                const def = PATCH_DEFS[item.typeId];
+                const isSelected = state.selectedInventoryIndex === idx;
+                const card = document.createElement('div');
+                card.className = `p-2.5 rounded-xl bg-slate-900 border cursor-pointer transition-all flex flex-col justify-between ${isSelected ? 'patch-selected' : 'hover:border-cyan-400'}`;
+                card.style.borderColor = isSelected ? '#ffd700' : def.color;
+                card.innerHTML = `
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-base">${def.icon} <span class="text-xs font-bold" style="color:${def.color}">${def.name}</span></span>
+                        <span class="text-[10px] font-mono text-slate-400">MP+${def.manaCost}</span>
+                    </div>
+                    <div class="text-[10px] text-slate-400 leading-tight">${def.desc}</div>
+                `;
+                card.onclick = () => {
+                    sfx.playClick();
+                    state.selectedInventoryIndex = isSelected ? null : idx;
+                    renderCraftUI();
+                };
+                invGrid.appendChild(card);
+            });
+        }
+
+        // ボタンイベント登録
+        document.getElementById('openCraftBtn').addEventListener('click', toggleCraftModal);
+        document.getElementById('closeCraftBtn').addEventListener('click', toggleCraftModal);
+        document.getElementById('openSkillBtn').addEventListener('click', () => toggleSkillModal(false));
+        document.getElementById('closeSkillBtn').addEventListener('click', () => toggleSkillModal(false));
+        document.getElementById('switchToSkillBtn').addEventListener('click', () => toggleSkillModal(false));
+        document.getElementById('switchToCraftBtn').addEventListener('click', toggleCraftModal);
+        document.getElementById('gameOverSkillBtn').addEventListener('click', () => toggleSkillModal(true));
+
+        document.getElementById('startGameBtn').addEventListener('click', () => {
+            sfx.init();
+            sfx.playPickup();
+            document.getElementById('titleScreen').classList.add('hidden');
+            document.getElementById('hudLayer').classList.remove('hidden');
+            state.mode = 'playing';
+            initGame();
+        });
+
+        document.getElementById('retryGameBtn').addEventListener('click', () => {
+            sfx.init();
+            sfx.playPickup();
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            document.getElementById('hudLayer').classList.remove('hidden');
+            state.mode = 'playing';
+            initGame();
+        });
+
+        // ==========================================
+        // 11. 固定タイムステップ風メインループ開始
+        // ==========================================
+        let lastTime = performance.now();
+        function gameLoop(now) {
+            const dt = Math.min(0.05, (now - lastTime) / 1000);
+            lastTime = now;
+
+            update(dt);
+            render();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.onload = function () {
+            requestAnimationFrame(gameLoop);
+        };
+    </script>
+</body>
+</html>
